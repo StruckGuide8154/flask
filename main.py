@@ -1035,10 +1035,12 @@ class Chat {
     async checkAuth() {
         const token = localStorage.getItem('token');
         if (!token) return;
+        
         try {
             const response = await fetch('/api/aii/credits', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            
             if (response.ok) {
                 const data = await response.json();
                 this.showChat();
@@ -1046,12 +1048,14 @@ class Chat {
                 this.addMessage('assistant', 'Welcome back! How can I help you today?');
             }
         } catch (error) {
+            console.error('Auth check error:', error);
             localStorage.removeItem('token');
         }
     }
 
     async handleLogin(e) {
         e.preventDefault();
+        
         try {
             const response = await fetch('/api/aii/login', {
                 method: 'POST',
@@ -1061,6 +1065,7 @@ class Chat {
                     password: this.els.loginForm.password.value
                 })
             });
+
             if (response.ok) {
                 const data = await response.json();
                 localStorage.setItem('token', data.token);
@@ -1072,6 +1077,7 @@ class Chat {
                 this.els.loginError.classList.remove('hidden');
             }
         } catch (error) {
+            console.error('Login error:', error);
             this.els.loginError.textContent = 'Login failed';
             this.els.loginError.classList.remove('hidden');
         }
@@ -1100,7 +1106,7 @@ class Chat {
             this.addMessage('user', content);
             this.els.messageInput.value = '';
 
-            // Prepare request body
+            // Prepare request data
             const requestData = {
                 request: {
                     text: content,
@@ -1108,14 +1114,15 @@ class Chat {
                 }
             };
 
-            // If there are files, add them to FormData
+            let response;
+
             if (this.files.length > 0) {
+                // Send request with files
                 const formData = new FormData();
                 formData.append('request', JSON.stringify(requestData.request));
                 this.files.forEach(file => formData.append('files', file));
-                
-                // Send request with files
-                const response = await fetch('/api/aii/chat', {
+
+                response = await fetch('/api/aii/chat', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -1124,16 +1131,17 @@ class Chat {
                 });
             } else {
                 // Send JSON request without files
-                const response = await fetch('/api/aii/chat', {
+                response = await fetch('/api/aii/chat', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('token')}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(requestData)
-            });
+                });
+            }
 
-            // Handle different response status codes
+            // Handle response status codes
             if (response.status === 401) {
                 localStorage.removeItem('token');
                 window.location.reload();
@@ -1242,7 +1250,11 @@ class Chat {
     }
 }
 
-new Chat();    </script>
+// Initialize the chat application
+new Chat();
+
+
+</script>
 </body>
 </html>"""
     return HTMLResponse(content=html_content)
