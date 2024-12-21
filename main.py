@@ -1281,7 +1281,7 @@ def update_user(user: Dict):
 
 def calculate_cost(model: str, chars: int) -> float:
     cost = COSTS[model]
-    return ((chars / 1000) * cost["input"] + (chars * 1.5 / 1000) * cost["output"]) * 5
+    return ((chars / 1000) * cost["input"] + (chars * 1.5 / 1000) * cost["output"]) * 100
 
 # Routes
 @app.get("/admin")
