@@ -441,7 +441,7 @@ async def handle_gemini(
         async for chunk in response:
             yield chunk
     else:
-        return response.text
+        yield response.text
 
 
 # Add this to your FastAPI routes
