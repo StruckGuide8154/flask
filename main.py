@@ -342,7 +342,6 @@ async def chat(
     except Exception as e:
         logger.error(f"Error in chat: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
 async def handle_gpt(text: str, files: List[FileContent], history: Optional[List[dict]] = None):
     messages = []
     
@@ -1131,7 +1130,7 @@ class Chat {
                         'Authorization': `Bearer ${localStorage.getItem('token')}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(requestData
+                    body: JSON.stringify(requestData)
             });
 
             // Handle different response status codes
