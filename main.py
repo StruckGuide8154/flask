@@ -380,7 +380,7 @@ async def handle_claude(
         async for chunk in response:
             yield chunk
     else:
-        return response
+        yield response.text
 
 async def handle_gemini(
     model: str,
