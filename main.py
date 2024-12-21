@@ -48,6 +48,460 @@ security = HTTPBearer()
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+# Constants
+SECRET_KEY = "your-secret-key-change-in-production"
+API_KEYS = {
+    "OPENAI": os.getenv("opene", "default-key"),
+    "ANTHROPIC": os.getenv("secretant", "default-key"),
+    "GEMINI": os.getenv("geme", "default-key")
+}
+
+MODELS = {
+    # Gemini Models
+    "gemini-flash-8b": {
+        "input": 0.05*40,
+        "output": 0.20*40,
+        "context_window": 32000,
+        "max_output_tokens": 1024,
+        "features": ["text", "summarization"],
+        "supports_stream": True,
+        "description": "Fast model for simple tasks and summarization"
+    },
+    "gemini-flash": {
+        "input": 0.075*40,
+        "output": 0.30*40,
+        "context_window": 128000,
+        "max_output_tokens": 2048,
+        "features": ["text", "vision", "audio", "video"],
+        "supports_stream": True,
+        "description": "Fast model for multimedia understanding"
+    },
+    "gemini-pro": {
+        "input": 1.25*40,
+        "output": 5.00*40,
+        "context_window": 1000000,
+        "max_output_tokens": 2048,
+        "features": ["text", "code", "math"],
+        "supports_stream": True,
+        "description": "Complex tasks and mathematical reasoning"
+    },
+    "gemini-pro-2": {
+        "input": 2.50*40,
+        "output": 10.00*40,
+        "context_window": 2000000,
+        "max_output_tokens": 4096,
+        "features": ["text", "vision", "code", "tools"],
+        "supports_stream": True,
+        "description": "Best for multimodal tasks and tool use"
+    },
+
+    # GPT Models
+    "gpt4o-mini": {
+        "input": 0.00015*40,
+        "output": 0.000075*40,
+        "context_window": 128000,
+        "max_output_tokens": 4096,
+        "features": ["text", "code"],
+        "supports_stream": True,
+        "description": "Good for day to day tasks"
+    },
+    "gpt4o": {
+        "input": 0.0025*40,
+        "output": 0.00125*40,
+        "context_window": 128000,
+        "max_output_tokens": 4096,
+        "features": ["text", "vision", "code", "math"],
+        "supports_stream": True,
+        "description": "Clever, good at reasoning and math"
+    },
+
+    # Claude Models
+    "claude-haiku": {
+        "input": 0.003*40,
+        "output": 0.00375*40,
+        "context_window": 200000,
+        "max_output_tokens": 4096,
+        "features": ["text", "vision", "code"],
+        "supports_stream": True,
+        "description": "Able to do almost anything"
+    },
+    "claude-opus": {
+        "input": 0.015*40,
+        "output": 0.075*40,
+        "context_window": 200000,
+        "max_output_tokens": 8192,
+        "features": ["text", "vision", "code"],
+        "supports_stream": True,
+        "description": "Perfect for English and short complex tasks"
+    },
+    "claude-sonnet": {
+        "input": 0.008*40,
+        "output": 0.024*40,
+        "context_window": 200000,
+        "max_output_tokens": 8192,
+        "features": ["text", "vision", "code"],
+        "supports_stream": True,
+        "description": "Most intelligent, can do 99% of anything"
+    }
+}
+
+# Pydantic Models
+class FileContent(BaseModel):
+    mime_type: str
+    data: str
+    token_count: int
+
+class TokenUsage(BaseModel):
+    input_tokens: int
+    output_tokens: int
+    cache_tokens: Optional[int] = 0
+    total_cost: float
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class MessageRequest(BaseModel):
+    text: str
+    model: str
+    files: Optional[List[str]] = None
+    history: Optional[List[dict]] = None
+    stream: bool = False
+
+# Setup DB paths
+os.makedirs("db", exist_ok=True)
+USERS_FILE = "db/users.json"
+USAGE_FILE = "db/usage.json"
+
+# Initialize DB files if they don't exist
+if not os.path.exists(USERS_FILE):
+    with open(USERS_FILE, 'w') as f:
+        json.dump({"items": [
+            {
+                "id": "admin",
+                "username": "admin",
+                "password_hash": hashlib.sha256("admin123".encode()).hexdigest(),
+                "credits": 1000.0,
+                "is_admin": True
+            }
+        ]}, f)
+
+if not os.path.exists(USAGE_FILE):
+    with open(USAGE_FILE, 'w') as f:
+        json.dump({"items": []}, f)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
+# Helper functions
+async def get_current_user(auth: HTTPAuthorizationCredentials = Depends(security)) -> Dict:
+    try:
+        payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=["HS256"])
+        user = get_user(payload["sub"])
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid user")
+        return user
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+def get_user(username: str) -> Optional[Dict]:
+    with open(USERS_FILE) as f:
+        return next((u for u in json.load(f)["items"] if u["username"] == username), None)
+
+def update_user(user: Dict):
+    with open(USERS_FILE) as f:
+        data = json.load(f)
+    idx = next(i for i, u in enumerate(data["items"]) if u["id"] == user["id"])
+    data["items"][idx] = user
+    with open(USERS_FILE, 'w') as f:
+        json.dump(data, f)
+
+async def process_file(file: UploadFile) -> FileContent:
+    """Process uploaded file and return content with token count"""
+    content = await file.read()
+    mime_type = file.content_type or "application/octet-stream"
+
+    # Calculate token count based on file type
+    if mime_type.startswith('image/'):
+        token_count = 1000  # Approximate token count for images
+    else:
+        # For text files, estimate tokens based on content length
+        text_content = content.decode('utf-8', errors='ignore')
+        token_count = len(text_content.split()) * 2  # Rough estimation
+
+    return FileContent(
+        mime_type=mime_type,
+        data=base64.b64encode(content).decode(),
+        token_count=token_count
+    )
+
+def log_usage(user_id: str, model: str, tokens: int, cost: float):
+    with open(USAGE_FILE) as f:
+        usage = json.load(f)
+    
+    usage["items"].append({
+        "user_id": user_id,
+        "timestamp": datetime.utcnow().isoformat(),
+        "model": model,
+        "tokens": tokens,
+        "cost": cost
+    })
+    
+    with open(USAGE_FILE, 'w') as f:
+        json.dump(usage, f)
+
+# Routes
+@app.post("/api/aii/login")
+async def login(request: LoginRequest):
+    user = get_user(request.username)
+    if not user or user["password_hash"] != hashlib.sha256(request.password.encode()).hexdigest():
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    token = jwt.encode(
+        {
+            "sub": user["username"],
+            "exp": datetime.utcnow() + timedelta(days=1)
+        },
+        SECRET_KEY,
+        algorithm="HS256"
+    )
+    
+    return {
+        "token": token,
+        "user": {
+            "username": user["username"],
+            "credits": user["credits"],
+            "is_admin": user.get("is_admin", False)
+        }
+    }
+
+@app.post("/api/aii/chat")
+async def chat(
+    request: MessageRequest,
+    files: List[UploadFile] = File(None),
+    current_user: Dict = Depends(get_current_user)
+):
+    try:
+        # Process files if any
+        processed_files = []
+        if files:
+            for file in files:
+                processed_file = await process_file(file)
+                processed_files.append(processed_file)
+
+        # Calculate token usage and cost
+        base_tokens = len(request.text.split()) * 2  # Rough estimation
+        file_tokens = sum(f.token_count for f in processed_files)
+        total_tokens = base_tokens + file_tokens
+
+        model_config = MODELS[request.model]
+        cost = (total_tokens * model_config["input"]) + (total_tokens * 1.5 * model_config["output"])
+
+        # Check credits
+        if current_user["credits"] < cost:
+            raise HTTPException(status_code=402, detail="Insufficient credits")
+
+        # Process request based on model
+        if request.model == "gpt4o":
+            response = await handle_gpt(request.text, processed_files, request.history)
+        elif request.model == "claude-opus":
+            response = await handle_claude(request.text, processed_files, request.history)
+        elif request.model == "gemini-pro":
+            response = await handle_gemini(request.text, processed_files, request.history)
+        else:
+            raise HTTPException(status_code=400, detail="Invalid model")
+
+        # Update user credits and log usage
+        current_user["credits"] -= cost
+        update_user(current_user)
+        log_usage(current_user["id"], request.model, total_tokens, cost)
+
+        return {
+            "response": response["response"],
+            "model": request.model,
+            "usage": {
+                "total_tokens": total_tokens,
+                "cost": cost
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error in chat: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def handle_gpt(text: str, files: List[FileContent], history: Optional[List[dict]] = None):
+    messages = []
+    
+    if history:
+        messages.extend(history)
+    
+    for file in files:
+        if file.mime_type.startswith("image/"):
+            messages.append({
+                "role": "user",
+                "content": [{
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{file.mime_type};base64,{file.data}"
+                    }
+                }]
+            })
+    
+    messages.append({"role": "user", "content": text})
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {API_KEYS['OPENAI']}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "gpt4o",
+                "messages": messages,
+                "max_tokens": MODELS["gpt4o"]["max_output_tokens"]
+            },
+            timeout=30.0
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail="OpenAI API error")
+        
+        result = response.json()
+        return {
+            "response": result["choices"][0]["message"]["content"],
+            "model": "gpt4o"
+        }
+
+async def handle_claude(text: str, files: List[FileContent], history: Optional[List[dict]] = None):
+    messages = []
+    
+    if history:
+        messages.extend(history)
+    
+    for file in files:
+        messages.append({
+            "role": "user",
+            "content": [{
+                "type": "image" if file.mime_type.startswith("image/") else "file",
+                "source": {
+                    "type": "base64",
+                    "media_type": file.mime_type,
+                    "data": file.data
+                }
+            }]
+        })
+    
+    messages.append({"role": "user", "content": text})
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": API_KEYS["ANTHROPIC"],
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "claude-opus",
+                "max_tokens": MODELS["claude-opus"]["max_output_tokens"],
+                "messages": messages
+            },
+            timeout=30.0
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail="Anthropic API error")
+        
+        result = response.json()
+        return {
+            "response": result["content"][0]["text"],
+            "model": "claude-opus"
+        }
+
+async def handle_gemini(text: str, files: List[FileContent], history: Optional[List[dict]] = None):
+    contents = []
+    
+    for file in files:
+        if file.mime_type.startswith("image/"):
+            contents.append({
+                "parts": [{
+                    "inline_data": {
+                        "mime_type": file.mime_type,
+                        "data": file.data
+                    }
+                }]
+            })
+    
+    contents.append({
+        "parts": [{"text": text}]
+    })
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": API_KEYS["GEMINI"]
+            },
+            json={
+                "contents": contents,
+                "generationConfig": {
+                    "maxOutputTokens": MODELS["gemini-pro"]["max_output_tokens"]
+                }
+            },
+            timeout=30.0
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail="Gemini API error")
+        
+        result = response.json()
+        return {
+            "response": result["candidates"][0]["content"]["parts"][0]["text"],
+            "model": "gemini-pro"
+        }
+
+@app.get("/api/aii/models")
+async def get_models(current_user: Dict = Depends(get_current_user)):
+    """Get available models and their configurations"""
+    return {"models": MODELS}
+
+@app.get("/api/aii/credits")
+async def get_credits(current_user: Dict = Depends(get_current_user)):
+    """Get user's current credit balance"""
+    return {"credits": current_user["credits"]}
+
+@app.get("/api/aii/usage")
+async def get_usage(current_user: Dict = Depends(get_current_user)):
+    """Get user's usage history"""
+    with open(USAGE_FILE) as f:
+        usage = json.load(f)
+    return {"usage": [item for item in usage["items"] if item["user_id"] == current_user["id"]]}
+
+# Admin routes
+@app.post("/api/aii/admin/add_credits")
+async def add_credits(
+    username: str,
+    amount: float,
+    current_user: Dict = Depends(get_current_user)
+):
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    user = get_user(username)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user["credits"] += amount
+    update_user(user)
+    return {"message": "Credits added successfully"}
 # Enhanced Model Configurations
 MODELS = {
     # Gemini Models
