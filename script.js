@@ -544,4 +544,3 @@
       }
     }
   }, 300000); // Check every 5 minutes
-)();
