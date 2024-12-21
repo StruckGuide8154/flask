@@ -167,7 +167,12 @@ class MessageRequest(BaseModel):
     files: Optional[List[str]] = None
     history: Optional[List[dict]] = None
     stream: bool = False
+# Pydantic models
 
+class UserResponse(BaseModel):
+    username: str
+    credits: float
+    is_admin: bool = False
 # Setup DB paths
 os.makedirs("db", exist_ok=True)
 USERS_FILE = "db/users.json"
@@ -248,40 +253,57 @@ def log_usage(user_id: str, model: str, tokens: int, cost: float):
         json.dump(usage, f)
 
 # Routes
-@app.post("/api/aii/login")
+@app.post("/api/aii/login", response_model=Dict[str, Union[str, UserResponse]])
 async def login(request: LoginRequest):
     user = get_user(request.username)
     if not user or user["password_hash"] != hashlib.sha256(request.password.encode()).hexdigest():
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password"
+        )
     
-    token = jwt.encode(
-        {
-            "sub": user["username"],  # Using "sub" consistently
-            "exp": datetime.utcnow() + timedelta(days=1)
-        },
-        SECRET_KEY,
-        algorithm="HS256"
-    )
+    # Create access token
+    token = create_access_token(user["username"])
     
+    # Return token and user info
     return {
         "token": token,
-        "user": {
-            "username": user["username"],
-            "credits": user["credits"],
-            "is_admin": user.get("is_admin", False)
-        }
+        "user": UserResponse(
+            username=user["username"],
+            credits=user["credits"],
+            is_admin=user.get("is_admin", False)
+        )
     }
+
+@app.get("/api/aii/verify")
+async def verify_token(current_user: Dict = Depends(get_current_user)):
+    """Verify token and return user info"""
+    return {
+        "valid": True,
+        "user": UserResponse(
+            username=current_user["username"],
+            credits=current_user["credits"],
+            is_admin=current_user.get("is_admin", False)
+        )
+    }
+
 
 async def get_current_user(auth: HTTPAuthorizationCredentials = Depends(security)) -> Dict:
     try:
         payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=["HS256"])
-        username = payload["sub"]  # Using "sub" consistently
+        username = payload.get("sub")  # Using get() for safety
+        if not username:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+        
         user = get_user(username)
         if not user:
-            raise HTTPException(status_code=401, detail="Invalid user")
+            raise HTTPException(status_code=401, detail="User not found")
+        
         return user
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
 
 @app.post("/api/aii/chat")
 async def chat(
@@ -479,6 +501,7 @@ async def get_models(current_user: Dict = Depends(get_current_user)):
 async def get_credits(current_user: Dict = Depends(get_current_user)):
     """Get user's current credit balance"""
     return {"credits": current_user["credits"]}
+
 
 @app.get("/api/aii/usage")
 async def get_usage(current_user: Dict = Depends(get_current_user)):
@@ -1297,6 +1320,18 @@ async def get_context_window(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+def create_access_token(username: str) -> str:
+    expire = datetime.utcnow() + timedelta(days=1)
+    return jwt.encode(
+        {
+            "sub": username,  # Using "sub" as standard JWT claim
+            "exp": expire,
+            "type": "access"
+        },
+        SECRET_KEY,
+        algorithm="HS256"
+    )
+
 @app.post("/api/ai/cache")
 async def create_cache(
     request: Dict,
@@ -1435,7 +1470,8 @@ app.add_middleware(
 # Helper functions
 def get_user(username: str) -> Optional[Dict]:
     with open(USERS_FILE) as f:
-        return next((u for u in json.load(f)["items"] if u["username"] == username), None)
+        users = json.load(f)
+        return next((u for u in users["items"] if u["username"] == username), None)
 
 def update_user(user: Dict):
     with open(USERS_FILE) as f:
