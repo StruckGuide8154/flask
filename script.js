@@ -1,5 +1,5 @@
 javascript:(function(){
-  const API_BASE = 'flask-production-05c4.up.railway.app'; // Change this to your server URL
+  const API_BASE = 'https://nicee.up.railway.app'; // Change this to your server URL
   // Auth state
   const FREE_TIER_DAILY_LIMIT = 8;
 
