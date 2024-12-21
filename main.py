@@ -199,16 +199,7 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# Helper functions
-async def get_current_user(auth: HTTPAuthorizationCredentials = Depends(security)) -> Dict:
-    try:
-        payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=["HS256"])
-        user = get_user(payload["sub"])
-        if not user:
-            raise HTTPException(status_code=401, detail="Invalid user")
-        return user
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+
 
 def get_user(username: str) -> Optional[Dict]:
     with open(USERS_FILE) as f:
@@ -265,7 +256,7 @@ async def login(request: LoginRequest):
     
     token = jwt.encode(
         {
-            "sub": user["username"],
+            "sub": user["username"],  # Using "sub" consistently
             "exp": datetime.utcnow() + timedelta(days=1)
         },
         SECRET_KEY,
@@ -280,6 +271,17 @@ async def login(request: LoginRequest):
             "is_admin": user.get("is_admin", False)
         }
     }
+
+async def get_current_user(auth: HTTPAuthorizationCredentials = Depends(security)) -> Dict:
+    try:
+        payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=["HS256"])
+        username = payload["sub"]  # Using "sub" consistently
+        user = get_user(username)
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid user")
+        return user
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 @app.post("/api/aii/chat")
 async def chat(
