@@ -993,248 +993,239 @@ async def serve_expansionai_interface():
     </div>
 
     <script>
-        class Chat {
-            constructor() {
-                this.setupElements();
-                this.setupEvents();
-                this.checkAuth();
-            }
+class Chat {
+    constructor() {
+        this.setupElements();
+        this.setupEvents();
+        this.checkAuth();
+    }
 
-            setupElements() {
-                this.els = {
-                    loginModal: document.getElementById('loginModal'),
-                    loginForm: document.getElementById('loginForm'),
-                    loginError: document.getElementById('loginError'),
-                    chatInterface: document.getElementById('chatInterface'),
-                    messages: document.getElementById('messages'),
-                    messageInput: document.getElementById('messageInput'),
-                    modelSelect: document.getElementById('modelSelect'),
-                    credits: document.getElementById('credits'),
-                    filePreviews: document.getElementById('filePreviews'),
-                    sendBtn: document.getElementById('sendBtn'),
-                    uploadBtn: document.getElementById('uploadBtn'),
-                    clearBtn: document.getElementById('clearBtn'),
-                    logoutBtn: document.getElementById('logoutBtn')
-                };
-                this.files = [];
-            }
+    setupElements() {
+        this.els = {
+            loginModal: document.getElementById('loginModal'),
+            loginForm: document.getElementById('loginForm'),
+            loginError: document.getElementById('loginError'),
+            chatInterface: document.getElementById('chatInterface'),
+            messages: document.getElementById('messages'),
+            messageInput: document.getElementById('messageInput'),
+            modelSelect: document.getElementById('modelSelect'),
+            credits: document.getElementById('credits'),
+            filePreviews: document.getElementById('filePreviews'),
+            sendBtn: document.getElementById('sendBtn'),
+            uploadBtn: document.getElementById('uploadBtn'),
+            clearBtn: document.getElementById('clearBtn'),
+            logoutBtn: document.getElementById('logoutBtn')
+        };
+        this.files = [];
+    }
 
-            setupEvents() {
-                this.els.loginForm.onsubmit = (e) => this.handleLogin(e);
-                this.els.sendBtn.onclick = () => this.sendMessage();
-                this.els.uploadBtn.onclick = () => this.handleUpload();
-                this.els.clearBtn.onclick = () => this.clearChat();
-                this.els.logoutBtn.onclick = () => this.logout();
-                this.els.messageInput.onkeydown = (e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        this.sendMessage();
-                    }
-                };
-            }
-
-            async checkAuth() {
-                const token = localStorage.getItem('token');
-                if (!token) return;
-                try {
-                    const response = await fetch('/api/aii/credits', {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (response.ok) {
-                        const data = await response.json();
-                        this.showChat();
-                        this.updateCredits(data.credits);
-                        this.addMessage('assistant', 'Welcome back! How can I help you today?');
-                    }
-                } catch (error) {
-                    localStorage.removeItem('token');
-                }
-            }
-
-            async handleLogin(e) {
+    setupEvents() {
+        this.els.loginForm.onsubmit = (e) => this.handleLogin(e);
+        this.els.sendBtn.onclick = () => this.sendMessage();
+        this.els.uploadBtn.onclick = () => this.handleUpload();
+        this.els.clearBtn.onclick = () => this.clearChat();
+        this.els.logoutBtn.onclick = () => this.logout();
+        this.els.messageInput.onkeydown = (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                try {
-                    const response = await fetch('/api/aii/login', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            username: this.els.loginForm.username.value,
-                            password: this.els.loginForm.password.value
-                        })
-                    });
-                    if (response.ok) {
-                        const data = await response.json();
-                        localStorage.setItem('token', data.token);
-                        this.showChat();
-                        this.updateCredits(data.user.credits);
-                        this.addMessage('assistant', 'Welcome! How can I help you today?');
-                    } else {
-                        this.els.loginError.textContent = 'Invalid credentials';
-                        this.els.loginError.classList.remove('hidden');
-                    }
-                } catch (error) {
-                    this.els.loginError.textContent = 'Login failed';
-                    this.els.loginError.classList.remove('hidden');
-                }
+                this.sendMessage();
             }
+        };
+    }
 
-            showChat() {
-                this.els.loginModal.classList.add('hidden');
-                this.els.chatInterface.classList.remove('hidden');
+    async checkAuth() {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        try {
+            const response = await fetch('/api/aii/credits', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                this.showChat();
+                this.updateCredits(data.credits);
+                this.addMessage('assistant', 'Welcome back! How can I help you today?');
             }
-
-            updateCredits(credits) {
-                this.els.credits.textContent = `Credits: ${credits.toFixed(2)}`;
-            }
-
-async function sendMessage() {
-    const content = messageInput.value.trim();
-    if (!content && !files.length) return;
-
-    // Disable UI elements while processing
-    sendBtn.disabled = true;
-    messageInput.disabled = true;
-    modelSelect.disabled = true;
-
-    try {
-        // Add user message to chat
-        addMessage('user', content);
-        messageInput.value = '';
-
-        // Prepare form data
-        const formData = new FormData();
-        formData.append('text', content);
-        formData.append('model', modelSelect.value);
-        files.forEach(file => formData.append('files', file));
-
-        // Send request
-        const response = await fetch('/api/aii/chat', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: formData
-        });
-
-        // Handle different response status codes
-        if (response.status === 401) {
-            // Token expired or invalid
+        } catch (error) {
             localStorage.removeItem('token');
-            window.location.reload();
-            return;
         }
+    }
 
-        if (response.status === 402) {
-            addMessage('assistant', 'Insufficient credits. Please add more credits to continue.');
-            return;
+    async handleLogin(e) {
+        e.preventDefault();
+        try {
+            const response = await fetch('/api/aii/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: this.els.loginForm.username.value,
+                    password: this.els.loginForm.password.value
+                })
+            });
+            if (response.ok) {
+                const data = await response.json();
+                localStorage.setItem('token', data.token);
+                this.showChat();
+                this.updateCredits(data.user.credits);
+                this.addMessage('assistant', 'Welcome! How can I help you today?');
+            } else {
+                this.els.loginError.textContent = 'Invalid credentials';
+                this.els.loginError.classList.remove('hidden');
+            }
+        } catch (error) {
+            this.els.loginError.textContent = 'Login failed';
+            this.els.loginError.classList.remove('hidden');
         }
+    }
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+    showChat() {
+        this.els.loginModal.classList.add('hidden');
+        this.els.chatInterface.classList.remove('hidden');
+    }
 
-        // Process successful response
-        const data = await response.json();
-        
-        // Add AI response to chat
-        addMessage('assistant', data.response);
+    updateCredits(credits) {
+        this.els.credits.textContent = `Credits: ${credits.toFixed(2)}`;
+    }
 
-        // Update credits if provided
-        if (data.usage?.cost) {
-            const creditsResponse = await fetch('/api/aii/credits', {
+    async sendMessage() {
+        const content = this.els.messageInput.value.trim();
+        if (!content && !this.files.length) return;
+
+        // Disable UI elements while processing
+        this.els.sendBtn.disabled = true;
+        this.els.messageInput.disabled = true;
+        this.els.modelSelect.disabled = true;
+
+        try {
+            // Add user message to chat
+            this.addMessage('user', content);
+            this.els.messageInput.value = '';
+
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('text', content);
+            formData.append('model', this.els.modelSelect.value);
+            this.files.forEach(file => formData.append('files', file));
+
+            // Send request
+            const response = await fetch('/api/aii/chat', {
+                method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
-                }
+                },
+                body: formData
             });
-            if (creditsResponse.ok) {
-                const creditsData = await creditsResponse.json();
-                updateCredits(creditsData.credits);
-            }
-        }
 
-        // Clear any uploaded files
-        clearFiles();
-
-    } catch (error) {
-        console.error('Error in sendMessage:', error);
-        addMessage(
-            'assistant', 
-            'Sorry, something went wrong. Please try again or contact support if the problem persists.'
-        );
-    } finally {
-        // Re-enable UI elements
-        sendBtn.disabled = false;
-        messageInput.disabled = false;
-        modelSelect.disabled = false;
-    }
-}
-
-// Helper function to add a message to the chat
-function addMessage(role, content) {
-    const div = document.createElement('div');
-    div.className = `message-enter flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
-    div.innerHTML = `
-        <div class="max-w-[80%] ${role === 'user' ? 'bg-blue-600/30' : 'bg-gray-800/30'} rounded-2xl p-4">
-            <div class="text-sm text-gray-400 mb-1">${role === 'user' ? 'You' : 'AI'}</div>
-            <div>${content}</div>
-        </div>
-    `;
-    messages.appendChild(div);
-    messages.scrollTop = messages.scrollHeight;
-}
-
-// Helper function to update credits display
-function updateCredits(credits) {
-    const creditsElement = document.getElementById('credits');
-    if (creditsElement) {
-        creditsElement.textContent = `Credits: ${credits.toFixed(2)}`;
-    }
-}
-            handleUpload() {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.multiple = true;
-                input.accept = 'image/*,.pdf,.txt';
-                input.onchange = (e) => {
-                    Array.from(e.target.files).forEach(file => {
-                        this.files.push(file);
-                        this.addFilePreview(file);
-                    });
-                };
-                input.click();
-            }
-
-            addFilePreview(file) {
-                const div = document.createElement('div');
-                div.className = 'bg-gray-800/50 rounded-lg p-2 flex items-center gap-2';
-                div.innerHTML = `
-                    <span class="text-sm">${file.name}</span>
-                    <button class="text-gray-400 hover:text-white">×</button>
-                `;
-                div.querySelector('button').onclick = () => {
-                    this.files = this.files.filter(f => f !== file);
-                    div.remove();
-                };
-                this.els.filePreviews.appendChild(div);
-            }
-
-            clearFiles() {
-                this.files = [];
-                this.els.filePreviews.innerHTML = '';
-            }
-
-            clearChat() {
-                this.els.messages.innerHTML = '';
-                this.addMessage('assistant', 'Chat cleared. How can I help you?');
-            }
-
-            logout() {
+            // Handle different response status codes
+            if (response.status === 401) {
                 localStorage.removeItem('token');
-                location.reload();
+                window.location.reload();
+                return;
             }
-        }
 
-        new Chat();
+            if (response.status === 402) {
+                this.addMessage('assistant', 'Insufficient credits. Please add more credits to continue.');
+                return;
+            }
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            // Process successful response
+            const data = await response.json();
+            
+            // Add AI response to chat
+            this.addMessage('assistant', data.response);
+
+            // Update credits if provided
+            if (data.usage?.cost) {
+                const creditsResponse = await fetch('/api/aii/credits', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                if (creditsResponse.ok) {
+                    const creditsData = await creditsResponse.json();
+                    this.updateCredits(creditsData.credits);
+                }
+            }
+
+            // Clear any uploaded files
+            this.clearFiles();
+
+        } catch (error) {
+            console.error('Error in sendMessage:', error);
+            this.addMessage(
+                'assistant', 
+                'Sorry, something went wrong. Please try again or contact support if the problem persists.'
+            );
+        } finally {
+            // Re-enable UI elements
+            this.els.sendBtn.disabled = false;
+            this.els.messageInput.disabled = false;
+            this.els.modelSelect.disabled = false;
+        }
+    }
+
+    addMessage(role, content) {
+        const div = document.createElement('div');
+        div.className = `message-enter flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+        div.innerHTML = `
+            <div class="max-w-[80%] ${role === 'user' ? 'bg-blue-600/30' : 'bg-gray-800/30'} rounded-2xl p-4">
+                <div class="text-sm text-gray-400 mb-1">${role === 'user' ? 'You' : 'AI'}</div>
+                <div>${content}</div>
+            </div>
+        `;
+        this.els.messages.appendChild(div);
+        this.els.messages.scrollTop = this.els.messages.scrollHeight;
+    }
+
+    handleUpload() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        input.accept = 'image/*,.pdf,.txt';
+        input.onchange = (e) => {
+            Array.from(e.target.files).forEach(file => {
+                this.files.push(file);
+                this.addFilePreview(file);
+            });
+        };
+        input.click();
+    }
+
+    addFilePreview(file) {
+        const div = document.createElement('div');
+        div.className = 'bg-gray-800/50 rounded-lg p-2 flex items-center gap-2';
+        div.innerHTML = `
+            <span class="text-sm">${file.name}</span>
+            <button class="text-gray-400 hover:text-white">×</button>
+        `;
+        div.querySelector('button').onclick = () => {
+            this.files = this.files.filter(f => f !== file);
+            div.remove();
+        };
+        this.els.filePreviews.appendChild(div);
+    }
+
+    clearFiles() {
+        this.files = [];
+        this.els.filePreviews.innerHTML = '';
+    }
+
+    clearChat() {
+        this.els.messages.innerHTML = '';
+        this.addMessage('assistant', 'Chat cleared. How can I help you?');
+    }
+
+    logout() {
+        localStorage.removeItem('token');
+        location.reload();
+    }
+}
+
+new Chat();
     </script>
 </body>
 </html>"""
