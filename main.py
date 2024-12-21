@@ -61,6 +61,7 @@ COSTS = {
     "claude": {"input": 0.003, "output": 0.00375}
 }
 
+# Enhanced Request/Response Models
 class LoginData(BaseModel):
     username: str
     password: str
@@ -68,6 +69,21 @@ class LoginData(BaseModel):
 class SolveRequest(BaseModel):
     text: str
     model: str = "gpt4o-mini"
+    context: Optional[Dict] = None
+    imageData: Optional[Dict] = None
+
+class ChatRequest(BaseModel):
+    message: str
+    model: str
+    history: List[Dict] = []
+
+class ImageAnalysisRequest(BaseModel):
+    image: str
+    question: Optional[str] = None
+
+class ContextRequest(BaseModel):
+    elements: List[Dict]
+    question: str
 
 class UpdateCreditsRequest(BaseModel):
     user_id: str
@@ -303,24 +319,70 @@ async def create_user(request: CreateUserRequest, auth: HTTPAuthorizationCredent
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
+def get_user(username: str) -> Optional[Dict]:
+    with open(USERS_FILE) as f:
+        return next((u for u in json.load(f)["items"] if u["username"] == username), None)
+
+def update_user(user: Dict):
+    with open(USERS_FILE) as f:
+        data = json.load(f)
+    idx = next(i for i, u in enumerate(data["items"]) if u["id"] == user["id"])
+    data["items"][idx] = user
+    with open(USERS_FILE, 'w') as f:
+        json.dump(data, f)
+
+def calculate_cost(model: str, chars: int, include_context: bool = False) -> float:
+    base_cost = COSTS[model]
+    multiplier = 1.5 if include_context else 1.0
+    return ((chars / 1000) * base_cost["input"] + (chars * multiplier / 1000) * base_cost["output"]) * 40
+
+def log_usage(user_id: str, model: str, cost: float, chars: int, feature: str = "solve"):
+    with open(USAGE_FILE, 'r+') as f:
+        usage = json.load(f)
+        usage["items"].append({
+            "user_id": user_id,
+            "timestamp": datetime.utcnow().isoformat(),
+            "model": model,
+            "cost": cost,
+            "chars": chars,
+            "feature": feature
+        })
+        f.seek(0)
+        json.dump(usage, f)
+        f.truncate()
+
+
 @app.post("/api/solve")
 async def solve_question(request: SolveRequest, auth: HTTPAuthorizationCredentials = Depends(security)):
     try:
-        # Verify token and get user
         payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=["HS256"])
         user = get_user(payload["user_id"])
         if not user:
             raise HTTPException(status_code=401, detail="Invalid user")
 
-        # Calculate cost
-        cost = calculate_cost(request.model, len(request.text))
+        # Calculate cost including context if provided
+        total_chars = len(request.text)
+        if request.context:
+            total_chars += len(json.dumps(request.context))
+        cost = calculate_cost(request.model, total_chars, bool(request.context))
 
-        # Check credits if not free tier
         if not user.get("is_free_tier") and user["credits"] < cost:
             raise HTTPException(status_code=402, detail="Insufficient credits")
 
-        # Make API request based on model
+        # Prepare prompt with context
+        prompt = request.text
+        if request.context:
+            prompt = f"Context: {json.dumps(request.context)}\nQuestion: {request.text}"
+
         if request.model.startswith("gpt"):
+            # OpenAI API call
+            system_prompt = """You are an expert at answering questions. Provide your response as a valid JSON object with exactly these fields:
+            - 'answer' (a concise, clear answer)
+            - 'explanation' (a brief, helpful explanation)
+            - 'confidence' (a number 0-100)
+            - 'next_step' (optional text to identify next/continue button if applicable)
+            Example: {"answer": "7", "explanation": "To find the area, multiply length (3) by width (2): 3 × 2 = 6", "confidence": 95, "next_step": "Continue"}"""
+
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     "https://api.openai.com/v1/chat/completions",
@@ -331,42 +393,16 @@ async def solve_question(request: SolveRequest, auth: HTTPAuthorizationCredentia
                     json={
                         "model": "gpt-4-turbo-preview" if request.model == "gpt4o" else "gpt-3.5-turbo",
                         "messages": [
-                            {
-                                "role": "system",
-                                "content": "You are an expert at answering questions. Provide your response as a valid JSON object with exactly these three fields: 'answer' (a concise answer), 'explanation' (a brief explanation), and 'confidence' (a number 0-100). Example: {\"answer\": \"ampere\", \"explanation\": \"Current is measured in amperes (A)\", \"confidence\": 95}"
-                            },
-                            {
-                                "role": "user",
-                                "content": request.text
-                            }
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": prompt}
                         ]
                     }
                 )
-
+                
                 if response.status_code != 200:
                     raise HTTPException(status_code=response.status_code, detail="OpenAI API error")
-
-                response_content = response.json()["choices"][0]["message"]["content"]
-                try:
-                    # Handle both string and dict responses
-                    if isinstance(response_content, dict):
-                        result = response_content
-                    else:
-                        # Remove any potential leading/trailing whitespace
-                        response_content = response_content.strip()
-                        # Parse the string response
-                        result = json.loads(response_content)
-
-                    # Ensure required fields exist
-                    if not all(key in result for key in ['answer', 'explanation', 'confidence']):
-                        raise ValueError("Missing required fields in response")
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse GPT response: {response_content}")
-                    result = {
-                        "answer": "Error parsing response",
-                        "explanation": "The model returned an invalid format",
-                        "confidence": 0
-                    }
+                
+                result = json.loads(response.json()["choices"][0]["message"]["content"])
 
         else:  # Claude
             async with httpx.AsyncClient() as client:
@@ -382,7 +418,7 @@ async def solve_question(request: SolveRequest, auth: HTTPAuthorizationCredentia
                         "max_tokens": 150,
                         "messages": [{
                             "role": "user",
-                            "content": f"Answer this question and format the response exactly like this example, nothing else: {{'answer': 'ampere', 'explanation': 'Current is measured in amperes (A)', 'confidence': 95}}\n\nQuestion: {request.text}"
+                            "content": f"Answer this question and format as JSON with 'answer', 'explanation', 'confidence', and optional 'next_step' fields: {prompt}"
                         }]
                     }
                 )
@@ -390,45 +426,14 @@ async def solve_question(request: SolveRequest, auth: HTTPAuthorizationCredentia
                 if response.status_code != 200:
                     raise HTTPException(status_code=response.status_code, detail="Anthropic API error")
 
-                response_content = response.json()["content"][0]["text"]
-                try:
-                    # Handle both string and dict responses
-                    if isinstance(response_content, dict):
-                        result = response_content
-                    else:
-                        # Remove any potential leading/trailing whitespace
-                        response_content = response_content.strip()
-                        # Parse the string response
-                        result = json.loads(response_content)
+                result = json.loads(response.json()["content"][0]["text"])
 
-                    # Ensure required fields exist
-                    if not all(key in result for key in ['answer', 'explanation', 'confidence']):
-                        raise ValueError("Missing required fields in response")
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse Claude response: {response_content}")
-                    result = {
-                        "answer": "Error parsing response",
-                        "explanation": "The model returned an invalid format",
-                        "confidence": 0
-                    }
-
-        # Deduct credits if not free tier
+        # Update user credits and log usage
         if not user.get("is_free_tier"):
             user["credits"] -= cost
             update_user(user)
-
-        # Log usage
-        with open(USAGE_FILE) as f:
-            usage = json.load(f)
-        usage["items"].append({
-            "user_id": user["id"],
-            "timestamp": datetime.utcnow().isoformat(),
-            "model": request.model,
-            "cost": cost,
-            "chars": len(request.text)
-        })
-        with open(USAGE_FILE, "w") as f:
-            json.dump(usage, f)
+        
+        log_usage(user["id"], request.model, cost, total_chars)
 
         return {
             "response": result,
@@ -436,11 +441,10 @@ async def solve_question(request: SolveRequest, auth: HTTPAuthorizationCredentia
             "cached": False
         }
 
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
     except Exception as e:
         logger.error(f"Error in solve_question: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/admin/users/{user_id}/usage")
 async def get_user_usage(user_id: str, auth: HTTPAuthorizationCredentials = Depends(security)):
@@ -511,6 +515,142 @@ async def verify_token(auth: HTTPAuthorizationCredentials = Depends(security)):
         return {"valid": True}
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+@app.post("/api/chat")
+async def chat(request: ChatRequest, auth: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=["HS256"])
+        user = get_user(payload["user_id"])
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid user")
+
+        cost = calculate_cost(request.model, len(request.message))
+        if not user.get("is_free_tier") and user["credits"] < cost:
+            raise HTTPException(status_code=402, detail="Insufficient credits")
+
+        # Format chat history for API
+        formatted_history = []
+        for msg in request.history:
+            formatted_history.append({
+                "role": "user" if msg["type"] == "user" else "assistant",
+                "content": msg["content"]
+            })
+
+        if request.model.startswith("gpt"):
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {API_KEYS['OPENAI']}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "gpt-4-turbo-preview" if request.model == "gpt4o" else "gpt-3.5-turbo",
+                        "messages": formatted_history + [{"role": "user", "content": request.message}]
+                    }
+                )
+                
+                if response.status_code != 200:
+                    raise HTTPException(status_code=response.status_code, detail="OpenAI API error")
+                
+                answer = response.json()["choices"][0]["message"]["content"]
+
+        else:  # Claude
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": API_KEYS["ANTHROPIC"],
+                        "anthropic-version": "2023-06-01",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "claude-3-sonnet-20240229",
+                        "max_tokens": 500,
+                        "messages": formatted_history + [{"role": "user", "content": request.message}]
+                    }
+                )
+
+                if response.status_code != 200:
+                    raise HTTPException(status_code=response.status_code, detail="Anthropic API error")
+
+                answer = response.json()["content"][0]["text"]
+
+        # Update user credits and log usage
+        if not user.get("is_free_tier"):
+            user["credits"] -= cost
+            update_user(user)
+        
+        log_usage(user["id"], request.model, cost, len(request.message), "chat")
+
+        return {
+            "response": answer,
+            "cost": cost
+        }
+
+    except Exception as e:
+        logger.error(f"Error in chat: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+        
+@app.post("/api/analyze-image")
+async def analyze_image(request: ImageAnalysisRequest, auth: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=["HS256"])
+        user = get_user(payload["user_id"])
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid user")
+
+        # Calculate cost (images cost more)
+        base_chars = len(request.image) + (len(request.question) if request.question else 0)
+        cost = calculate_cost(request.model, base_chars) * 1.5
+
+        if not user.get("is_free_tier") and user["credits"] < cost:
+            raise HTTPException(status_code=402, detail="Insufficient credits")
+
+        # Process image and question using GPT-4 Vision
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {API_KEYS['OPENAI']}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "gpt-4-vision-preview",
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": request.question or "What's in this image?"},
+                                {"type": "image_url", "image_url": {"url": request.image}}
+                            ]
+                        }
+                    ],
+                    "max_tokens": 300
+                }
+            )
+
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail="Vision API error")
+
+            result = response.json()["choices"][0]["message"]["content"]
+
+        # Update user credits and log usage
+        if not user.get("is_free_tier"):
+            user["credits"] -= cost
+            update_user(user)
+        
+        log_usage(user["id"], "gpt4-vision", cost, base_chars, "image")
+
+        return {
+            "response": result,
+            "cost": cost
+        }
+
+    except Exception as e:
+        logger.error(f"Error in analyze_image: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn
