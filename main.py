@@ -205,6 +205,27 @@ app.add_middleware(
 )
 
 
+# Move these to the top of the file, after the initial imports and before any routes
+async def get_current_user(auth: HTTPAuthorizationCredentials = Depends(security)) -> Dict:
+    """
+    Validates the JWT token and returns the current user.
+    Raises HTTPException if token is invalid or user not found.
+    """
+    try:
+        payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=["HS256"])
+        username = payload.get("sub")
+        if not username:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+        
+        user = get_user(username)
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        return user
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
 
 def get_user(username: str) -> Optional[Dict]:
     with open(USERS_FILE) as f:
@@ -267,22 +288,6 @@ async def verify_token(current_user: Dict = Depends(get_current_user)):
     }
 
 
-async def get_current_user(auth: HTTPAuthorizationCredentials = Depends(security)) -> Dict:
-    try:
-        payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=["HS256"])
-        username = payload.get("sub")
-        if not username:
-            raise HTTPException(status_code=401, detail="Invalid token payload")
-        
-        user = get_user(username)
-        if not user:
-            raise HTTPException(status_code=401, detail="User not found")
-        
-        return user
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except jwt.JWTError:
-        raise HTTPException(status_code=401, detail="Could not validate credentials")
 
 @app.post("/api/aii/chat")
 async def chat(
