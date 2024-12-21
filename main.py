@@ -1101,19 +1101,37 @@ class Chat {
             this.addMessage('user', content);
             this.els.messageInput.value = '';
 
-            // Prepare form data
-            const formData = new FormData();
-            formData.append('text', content);
-            formData.append('model', this.els.modelSelect.value);
-            this.files.forEach(file => formData.append('files', file));
+            // Prepare request body
+            const requestData = {
+                request: {
+                    text: content,
+                    model: this.els.modelSelect.value
+                }
+            };
 
-            // Send request
-            const response = await fetch('/api/aii/chat', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: formData
+            // If there are files, add them to FormData
+            if (this.files.length > 0) {
+                const formData = new FormData();
+                formData.append('request', JSON.stringify(requestData.request));
+                this.files.forEach(file => formData.append('files', file));
+                
+                // Send request with files
+                const response = await fetch('/api/aii/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: formData
+                });
+            } else {
+                // Send JSON request without files
+                const response = await fetch('/api/aii/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData
             });
 
             // Handle different response status codes
@@ -1225,8 +1243,7 @@ class Chat {
     }
 }
 
-new Chat();
-    </script>
+new Chat();    </script>
 </body>
 </html>"""
     return HTMLResponse(content=html_content)
