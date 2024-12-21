@@ -443,6 +443,583 @@ async def handle_gemini(
     else:
         return response.text
 
+
+# Add this to your FastAPI routes
+@app.get("/ai")
+async def serve_expansionai_interface():
+    """Serve the ExpansionAI interface"""
+    html_content = """<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ExpansionAI | Advanced Intelligence Interface</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-tomorrow.min.css">
+    <style>
+        :root {
+            --gold-primary: #BF9B30;
+            --gold-secondary: #D4AF37;
+            --gold-highlight: #FFD700;
+            --black-primary: #0A0A0A;
+            --black-secondary: #141414;
+            --black-highlight: #1A1A1A;
+            --gradient-gold: linear-gradient(135deg, var(--gold-primary), var(--gold-secondary));
+        }
+
+        * { font-family: 'Inter', system-ui, sans-serif; }
+        
+        body { background: var(--black-primary); color: #ffffff; }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--black-secondary); }
+        ::-webkit-scrollbar-thumb { 
+            background: var(--gold-primary); 
+            border-radius: 3px;
+        }
+
+        .sidebar {
+            background: var(--black-secondary);
+            border-right: 1px solid rgba(191, 155, 48, 0.2);
+            box-shadow: 2px 0 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .chat-container {
+            background: radial-gradient(circle at top, #1a1a1a, var(--black-primary));
+        }
+
+        .message-input {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(191, 155, 48, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .gold-button {
+            background: var(--gradient-gold);
+            color: var(--black-primary);
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .model-selector {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(191, 155, 48, 0.2);
+            color: var(--gold-primary);
+        }
+
+        .ai-message {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(191, 155, 48, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .user-message {
+            background: rgba(191, 155, 48, 0.05);
+            border: 1px solid rgba(191, 155, 48, 0.2);
+        }
+
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            padding: 0.5rem;
+        }
+
+        .typing-dot {
+            width: 4px;
+            height: 4px;
+            background: var(--gold-primary);
+            border-radius: 50%;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-4px); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fade-in { animation: fadeIn 0.3s ease forwards; }
+    </style>
+</head>
+<body class="overflow-hidden">
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div class="sidebar w-80 flex flex-col">
+            <div class="p-6 flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-primary to-gold-secondary flex items-center justify-center">
+                    <svg class="w-6 h-6 text-black" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M13.5 3.5L12 2l-1.5 1.5L9 2 7.5 3.5 6 2 4.5 3.5 3 2v20l1.5-1.5L6 22l1.5-1.5L9 22l1.5-1.5L12 22l1.5-1.5L15 22l1.5-1.5L18 22l1.5-1.5L21 22V2l-1.5 1.5L18 2l-1.5 1.5L15 2l-1.5 1.5z"/>
+                    </svg>
+                </div>
+                <h1 class="text-xl font-bold bg-gradient-to-r from-gold-primary to-gold-highlight bg-clip-text text-transparent">
+                    ExpansionAI
+                </h1>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-4 space-y-4" id="chat-list">
+                <!-- Chat history will be populated here -->
+            </div>
+
+            <div class="p-4 m-4 rounded-xl bg-black-highlight border border-gold-600/20">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-gold-primary to-gold-secondary flex items-center justify-center text-black font-bold user-initial">
+                        H
+                    </div>
+                    <div>
+                        <div class="font-medium user-name">User</div>
+                        <div class="text-xs text-gold-primary user-plan">Professional Plan</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Chat Area -->
+        <div class="flex-1 flex flex-col">
+            <div class="p-4 border-b border-gold-600/10 flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <select class="model-selector p-2 rounded-lg" id="model-select">
+                        <optgroup label="Fast Models">
+                            <option value="gemini-flash-8b">Gemini Flash 8B</option>
+                            <option value="gemini-flash">Gemini Flash</option>
+                            <option value="gemini-pro">Gemini Pro</option>
+                        </optgroup>
+                        <optgroup label="Standard Models">
+                            <option value="gpt4o-mini">GPT-4 Mini</option>
+                            <option value="gpt4o">GPT-4 Opus</option>
+                        </optgroup>
+                        <optgroup label="Advanced Models">
+                            <option value="claude-haiku">Claude Haiku</option>
+                            <option value="claude-opus">Claude Opus</option>
+                            <option value="claude-sonnet">Claude Sonnet</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button class="gold-button px-4 py-2 rounded-lg" id="clear-chat">Clear Chat</button>
+                    <button class="gold-button px-4 py-2 rounded-lg" id="export-chat">Export Chat</button>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-6 chat-container" id="chat-messages">
+                <!-- Messages will be added here -->
+            </div>
+
+            <div class="p-6 border-t border-gold-600/10">
+                <div class="max-w-4xl mx-auto">
+                    <div id="file-previews" class="flex flex-wrap gap-2 mb-4">
+                        <!-- File previews will appear here -->
+                    </div>
+                    
+                    <div class="flex items-end space-x-4">
+                        <div class="flex-1 relative">
+                            <textarea 
+                                id="message-input"
+                                class="message-input w-full rounded-xl py-3 px-4 text-white resize-none"
+                                placeholder="Send a message..."
+                                rows="3"
+                            ></textarea>
+                            
+                            <div class="absolute bottom-3 right-3 flex space-x-2">
+                                <button id="upload-btn" class="p-2 hover:bg-black-highlight rounded-lg text-gold-primary">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                                    </svg>
+                                </button>
+                                <button id="image-btn" class="p-2 hover:bg-black-highlight rounded-lg text-gold-primary">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button id="send-btn" class="gold-button p-3 rounded-xl flex items-center space-x-2">
+                            <span>Send</span>
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.0.2/marked.min.js"></script>
+    
+    <script>
+        class ExpansionAIChat {
+            constructor() {
+                this.messageInput = document.getElementById('message-input');
+                this.sendButton = document.getElementById('send-btn');
+                this.chatMessages = document.getElementById('chat-messages');
+                this.modelSelect = document.getElementById('model-select');
+                this.uploadBtn = document.getElementById('upload-btn');
+                this.imageBtn = document.getElementById('image-btn');
+                this.clearChat = document.getElementById('clear-chat');
+                this.exportChat = document.getElementById('export-chat');
+                this.filePreviews = document.getElementById('file-previews');
+                
+                this.files = [];
+                this.messages = [];
+                this.isStreaming = false;
+                
+                this.initializeEventListeners();
+                this.loadUserInfo();
+                this.showWelcomeMessage();
+            }
+
+            initializeEventListeners() {
+                this.sendButton.addEventListener('click', () => this.sendMessage());
+                this.messageInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+
+                this.uploadBtn.addEventListener('click', () => this.handleFileUpload());
+                this.imageBtn.addEventListener('click', () => this.handleImageUpload());
+                this.clearChat.addEventListener('click', () => this.clearAllMessages());
+                this.exportChat.addEventListener('click', () => this.exportChatHistory());
+
+                // File drag and drop
+                document.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+
+                document.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const files = Array.from(e.dataTransfer.files);
+                    this.handleFiles(files);
+                });
+            }
+
+            async loadUserInfo() {
+                try {
+                    const response = await fetch('/api/user/info', {
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        }
+                    });
+                    if (response.ok) {
+                        const userData = await response.json();
+                        document.querySelector('.user-name').textContent = userData.name;
+                        document.querySelector('.user-initial').textContent = userData.name[0];
+                        document.querySelector('.user-plan').textContent = userData.plan;
+                    }
+                } catch (error) {
+                    console.error('Error loading user info:', error);
+                }
+            }
+
+            showWelcomeMessage() {
+                const welcomeMessage = {
+                    role: 'assistant',
+                    content: `Welcome to ExpansionAI! I can help you with:
+                    - Complex code analysis and generation
+                    - Image and video understanding
+                    - Data analysis and visualization
+                    - Natural language tasks`,
+                    model: 'gemini-pro'
+                };
+                this.addMessage(welcomeMessage);
+            }
+
+            async sendMessage() {
+                const content = this.messageInput.value.trim();
+                if (!content && this.files.length === 0) return;
+
+                const userMessage = {
+                    role: 'user',
+                    content,
+                    files: this.files
+                };
+
+                this.addMessage(userMessage);
+                this.messageInput.value = '';
+                this.showTypingIndicator();
+
+                const formData = new FormData();
+                formData.append('text', content);
+                formData.append('model', this.modelSelect.value);
+                formData.append('stream', 'true');
+                
+                this.files.forEach(file => {
+                    formData.append('files', file);
+                });
+
+                try {
+                    const response = await fetch('/api/ai/solve', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        },
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('API request failed');
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let accumulatedResponse = '';
+
+                    while (true) {
+                        const {value, done} = await reader.read();
+                        if (done) break;
+                        
+                        const chunk = decoder.decode(value);
+                        accumulatedResponse += chunk;
+
+                        // Update the ongoing message
+                        this.updateStreamingMessage(accumulatedResponse);
+                    }
+
+                    // Finalize the message
+                    this.finalizeStreamingMessage(accumulatedResponse);
+                    
+                } catch (error) {
+                    console.error('Error sending message:', error);
+                    this.showError('Failed to send message');
+                } finally {
+                    this.hideTypingIndicator();
+                    this.clearFiles();
+                }
+            }
+
+            addMessage(message) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `${message.role}-message rounded-xl p-4 max-w-4xl mx-auto mb-6 fade-in`;
+                
+                const isUser = message.role === 'user';
+                
+                let html = `
+                    <div class="flex space-x-4 ${isUser ? 'flex-row-reverse' : ''}">
+                        <div class="w-8 h-8 rounded-lg ${isUser ? 'bg-blue-600' : 'bg-gradient-to-br from-gold-primary to-gold-secondary'} flex-shrink-0 flex items-center justify-center">
+                            ${isUser ? '<span class="text-white font-medium user-initial">U</span>' : 
+                            '<svg class="w-5 h-5 text-black" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5 3.5L12 2l-1.5 1.5L9 2 7.5 3.5 6 2 4.5 3.5 3 2v20l1.5-1.5L6 22l1.5-1.5L9 22l1.5-1.5L12 22l1.5-1.5L15 22l1.5-1.5L18 22l1.5-1.5L21 22V2l-1.5 1.5L18 2l-1.5 1.5L15 2l-1.5 1.5z"/></svg>'}
+                        </div>
+                        <div class="flex-1">
+                            <div class="flex items-center space-x-2 ${isUser ? 'justify-end' : ''}">
+                                <span class="font-medium">${isUser ? 'You' : 'ExpansionAI'}</span>
+                                ${!isUser && message.model ? `<span class="text-xs bg-gold-primary/10 text-gold-primary px-2 py-1 rounded">${message.model}</span>` : ''}
+                            </div>`;
+
+                // Add file previews if present
+                if (message.files && message.files.length > 0) {
+                    html += '<div class="flex flex-wrap gap-2 mt-2">';
+                    message.files.forEach(file => {
+                        html += this.createFilePreviewHTML(file);
+                    });
+                    html += '</div>';
+                }
+
+                // Add message content
+                const formattedContent = this.formatMessageContent(message.content);
+                html += `<div class="mt-2 prose prose-invert">${formattedContent}</div>`;
+                
+                html += '</div></div>';
+                
+                messageDiv.innerHTML = html;
+                this.chatMessages.appendChild(messageDiv);
+                this.scrollToBottom();
+
+                // Initialize code highlighting if needed
+                if (messageDiv.querySelector('pre code')) {
+                    Prism.highlightAllUnder(messageDiv);
+                }
+            }
+
+            formatMessageContent(content) {
+                if (!content) return '';
+                
+                // Convert markdown to HTML
+                let html = marked.parse(content);
+
+                // Special handling for code blocks
+                html = html.replace(/<pre><code class="language-(\w+)">([\s\S]*?)<\/code><\/pre>/g, 
+                    (_, lang, code) => `
+                    <div class="code-block relative">
+                        <div class="code-actions absolute top-2 right-2 opacity-0 transition-opacity">
+                            <button class="p-1 hover:bg-black-highlight rounded" onclick="navigator.clipboard.writeText(this.parentElement.parentElement.querySelector('code').textContent)">
+                                <svg class="w-4 h-4 text-gold-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre><code class="language-${lang}">${code}</code></pre>
+                    </div>`
+                );
+
+                return html;
+            }
+
+            showTypingIndicator() {
+                const typingDiv = document.createElement('div');
+                typingDiv.className = 'typing-indicator';
+                typingDiv.innerHTML = `
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                `;
+                this.chatMessages.appendChild(typingDiv);
+                this.scrollToBottom();
+            }
+
+            hideTypingIndicator() {
+                const indicator = this.chatMessages.querySelector('.typing-indicator');
+                if (indicator) {
+                    indicator.remove();
+                }
+            }
+
+            updateStreamingMessage(content) {
+                let streamingMsg = this.chatMessages.querySelector('.streaming-message');
+                if (!streamingMsg) {
+                    streamingMsg = document.createElement('div');
+                    streamingMsg.className = 'assistant-message rounded-xl p-4 max-w-4xl mx-auto mb-6 fade-in streaming-message';
+                    this.chatMessages.appendChild(streamingMsg);
+                }
+                
+                streamingMsg.innerHTML = this.formatMessageContent(content);
+                this.scrollToBottom();
+            }
+
+            finalizeStreamingMessage(content) {
+                const streamingMsg = this.chatMessages.querySelector('.streaming-message');
+                if (streamingMsg) {
+                    streamingMsg.classList.remove('streaming-message');
+                }
+            }
+
+            async handleFiles(files) {
+                const allowedTypes = {
+                    'image': ['jpeg', 'png', 'gif', 'webp'],
+                    'video': ['mp4', 'webm', 'ogg'],
+                    'audio': ['mp3', 'wav', 'ogg'],
+                    'application': ['pdf', 'json', 'txt']
+                };
+
+                for (const file of files) {
+                    const [type, subtype] = file.type.split('/');
+                    if (allowedTypes[type]?.includes(subtype)) {
+                        this.files.push(file);
+                        this.addFilePreview(file);
+                    }
+                }
+            }
+
+            addFilePreview(file) {
+                const preview = document.createElement('div');
+                preview.className = 'file-preview p-2 bg-black-highlight rounded flex items-center space-x-2';
+                
+                const icon = this.getFileIcon(file.type);
+                preview.innerHTML = `
+                    ${icon}
+                    <span class="text-sm truncate max-w-xs">${file.name}</span>
+                    <button class="text-gold-primary hover:text-gold-secondary">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                `;
+
+                preview.querySelector('button').onclick = () => {
+                    this.removeFile(file);
+                    preview.remove();
+                };
+
+                this.filePreviews.appendChild(preview);
+            }
+
+            getFileIcon(type) {
+                const [mainType] = type.split('/');
+                const icons = {
+                    'image': `<svg class="w-5 h-5 text-gold-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>`,
+                    'video': `<svg class="w-5 h-5 text-gold-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                    </svg>`,
+                    'audio': `<svg class="w-5 h-5 text-gold-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+                    </svg>`
+                };
+                
+                return icons[mainType] || `<svg class="w-5 h-5 text-gold-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                </svg>`;
+            }
+
+            removeFile(file) {
+                const index = this.files.indexOf(file);
+                if (index > -1) {
+                    this.files.splice(index, 1);
+                }
+            }
+
+            clearFiles() {
+                this.files = [];
+                this.filePreviews.innerHTML = '';
+            }
+
+            scrollToBottom() {
+                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+            }
+
+            clearAllMessages() {
+                this.chatMessages.innerHTML = '';
+                this.showWelcomeMessage();
+            }
+
+            exportChatHistory() {
+                const messages = Array.from(this.chatMessages.children).map(msg => {
+                    return {
+                        role: msg.classList.contains('user-message') ? 'user' : 'assistant',
+                        content: msg.querySelector('.prose')?.textContent || '',
+                        timestamp: new Date().toISOString()
+                    };
+                });
+
+                const blob = new Blob([JSON.stringify(messages, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `chat-history-${new Date().toISOString()}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+
+            showError(message) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded shadow-lg fade-in';
+                errorDiv.textContent = message;
+                document.body.appendChild(errorDiv);
+                setTimeout(() => errorDiv.remove(), 3000);
+            }
+        }
+
+        // Initialize the chat application
+        const chat = new ExpansionAI();
+    </script>
+</body>
+</html>"""
+    return HTMLResponse(content=html_content)
+
+
+
 @app.post("/api/ai/upload")
 async def upload_file(
     file: UploadFile = File(...),
