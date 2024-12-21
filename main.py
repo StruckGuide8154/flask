@@ -253,27 +253,6 @@ def log_usage(user_id: str, model: str, tokens: int, cost: float):
         json.dump(usage, f)
 
 # Routes
-@app.post("/api/aii/login", response_model=Dict[str, Union[str, UserResponse]])
-async def login(request: LoginRequest):
-    user = get_user(request.username)
-    if not user or user["password_hash"] != hashlib.sha256(request.password.encode()).hexdigest():
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid username or password"
-        )
-    
-    # Create access token
-    token = create_access_token(user["username"])
-    
-    # Return token and user info
-    return {
-        "token": token,
-        "user": UserResponse(
-            username=user["username"],
-            credits=user["credits"],
-            is_admin=user.get("is_admin", False)
-        )
-    }
 
 @app.get("/api/aii/verify")
 async def verify_token(current_user: Dict = Depends(get_current_user)):
@@ -291,7 +270,7 @@ async def verify_token(current_user: Dict = Depends(get_current_user)):
 async def get_current_user(auth: HTTPAuthorizationCredentials = Depends(security)) -> Dict:
     try:
         payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=["HS256"])
-        username = payload.get("sub")  # Using get() for safety
+        username = payload.get("sub")
         if not username:
             raise HTTPException(status_code=401, detail="Invalid token payload")
         
@@ -1877,6 +1856,30 @@ async def verify_token(auth: HTTPAuthorizationCredentials = Depends(security)):
         return {"valid": True}
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+@app.post("/api/aii/login", response_model=Dict[str, Union[str, UserResponse]])
+async def login(request: LoginRequest):
+    user = get_user(request.username)
+    if not user or user["password_hash"] != hashlib.sha256(request.password.encode()).hexdigest():
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password"
+        )
+    
+    # Create access token
+    token = create_access_token(user["username"])
+    
+    # Return token and user info
+    return {
+        "token": token,
+        "user": UserResponse(
+            username=user["username"],
+            credits=user["credits"],
+            is_admin=user.get("is_admin", False)
+        )
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
