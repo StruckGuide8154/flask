@@ -123,7 +123,7 @@ MODELS = {
 
 # Initialize API clients
 genai.configure(api_key=os.getenv("GEMINI_API_KEY", "default-key"))
-claude_client = anthropic.Client(api_key=os.getenv("ANTHROPIC_API_KEY", "default-key"))
+claude_client = anthropic.Client(api_key=os.getenv("secretant", "default-key"))
 
 class TokenUsage(BaseModel):
     input_tokens: int
