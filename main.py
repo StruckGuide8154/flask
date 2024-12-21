@@ -1381,7 +1381,7 @@ async def question_solver_page():
         <h3>2. Drag to Bookmarks Bar</h3>
         <p>Click and drag the button below to your bookmarks bar:</p>
 
-        <a href="javascript:(function(){const s=document.createElement('script');s.src='https://5b7a0633-a297-4047-b0ee-a4bde446805d-00-1ntphoomm251x.kirk.replit.dev/script.js';document.body.appendChild(s);})();" class="bookmarklet-button">Question Solver</a>
+        <a href="javascript:(function(){const s=document.createElement('script');s.src='flask-production-05c4.up.railway.app/script.js';document.body.appendChild(s);})();" class="bookmarklet-button">Question Solver</a>
 
         <h3>3. Use the Bookmarklet</h3>
         <p>Click the "Question Solver" bookmark on any webpage to activate</p>
