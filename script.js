@@ -175,6 +175,34 @@
       margin-top: 8px;
       text-align: center;
     }
+        .qt-input {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,215,0,0.2);
+      padding: 8px 12px;
+      border-radius: 6px;
+      color: white;
+      font-size: 13px;
+    }
+    .qt-input::placeholder {
+      color: rgba(255,255,255,0.5);
+    }
+    select.qt-input {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='rgba(255,215,0,0.8)' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+      cursor: pointer;
+    }
+    select.qt-input option {
+      background: rgb(25,25,25);
+      color: rgba(255,215,0,0.9);
+      padding: 8px;
+    }
+    select.qt-input:focus {
+      outline: none;
+      border-color: rgba(255,215,0,0.4);
+    }
   `;
   document.head.appendChild(style);
 
