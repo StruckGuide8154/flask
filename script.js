@@ -1,4 +1,5 @@
-  // Auth state
+  const API_BASE = 'https://nicee.up.railway.app'; // Change this to your server URL
+   // Auth state
   const FREE_TIER_DAILY_LIMIT = 8;
 
   // Create and inject styles
