@@ -1543,15 +1543,6 @@ async def admin_ui():
     with open("templates/admin.html", "r") as f:
         return HTMLResponse(content=f.read())
 
-@app.post("/api/login")
-async def login(data: LoginData):
-    user = get_user(data.username)
-    if not user or user["password_hash"] != hashlib.sha256(data.password.encode()).hexdigest():
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    return {
-        "token": jwt.encode({"user_id": user["id"], "exp": datetime.utcnow() + timedelta(days=1)}, SECRET_KEY),
-        "user": {k: v for k, v in user.items() if k != "password_hash"}
-    }
 
 
 def compress_js(js_content):
@@ -1722,7 +1713,7 @@ async def create_user(request: CreateUserRequest, auth: HTTPAuthorizationCredent
 
 
 @app.post("/api/solve")
-async def solve_question(request: SolveRequest, auth: HTTPAuthorizationCredentials = Depends(security)):
+async def solve_question(request: Request, auth: HTTPAuthorizationCredentials = Depends(security)):
     try:
         # Verify token and get user
         payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=["HS256"])
@@ -1730,123 +1721,40 @@ async def solve_question(request: SolveRequest, auth: HTTPAuthorizationCredentia
         if not user:
             raise HTTPException(status_code=401, detail="Invalid user")
 
+        # Parse request body
+        body = await request.json()
+        question_text = body.get("text", "")
+        model = body.get("model", "gpt4o-mini")
+
         # Calculate cost
-        cost = calculate_cost(request.model, len(request.text))
+        chars = len(question_text)
+        model_config = MODELS.get(model)
+        if not model_config:
+            raise HTTPException(status_code=400, detail="Invalid model")
+            
+        cost = (chars / 1000 * model_config["input"]) + (chars * 1.5 / 1000 * model_config["output"])
 
         # Check credits if not free tier
         if not user.get("is_free_tier") and user["credits"] < cost:
             raise HTTPException(status_code=402, detail="Insufficient credits")
 
-        # Make API request based on model
-        if request.model.startswith("gpt"):
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {API_KEYS['OPENAI']}",
-                        "Content-Type": "application/json"
-                    },
-                    json={
-                        "model": "gpt4o" if request.model == "gpt4o" else "gpt4o-mini",
-                        "messages": [
-                            {
-                                "role": "system",
-                                "content": "You are an expert at answering questions. Provide your response as a valid JSON object with exactly these three fields: 'answer' (a concise answer), 'explanation' (a brief explanation), and 'confidence' (a number 0-100). Example: {\"answer\": \"ampere\", \"explanation\": \"Current is measured in amperes (A)\", \"confidence\": 95}"
-                            },
-                            {
-                                "role": "user",
-                                "content": request.text
-                            }
-                        ]
-                    }
-                )
+        # Process request based on model
+        if model.startswith("gpt"):
+            result = await handle_gpt_question(question_text, model)
+        elif model.startswith("claude"):
+            result = await handle_claude_question(question_text)
+        elif model.startswith("gemini"):
+            result = await handle_gemini_question(question_text, model)
+        else:
+            raise HTTPException(status_code=400, detail="Invalid model")
 
-                if response.status_code != 200:
-                    raise HTTPException(status_code=response.status_code, detail="OpenAI API error")
-
-                response_content = response.json()["choices"][0]["message"]["content"]
-                try:
-                    # Handle both string and dict responses
-                    if isinstance(response_content, dict):
-                        result = response_content
-                    else:
-                        # Remove any potential leading/trailing whitespace
-                        response_content = response_content.strip()
-                        # Parse the string response
-                        result = json.loads(response_content)
-
-                    # Ensure required fields exist
-                    if not all(key in result for key in ['answer', 'explanation', 'confidence']):
-                        raise ValueError("Missing required fields in response")
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse GPT response: {response_content}")
-                    result = {
-                        "answer": "Error parsing response",
-                        "explanation": "The model returned an invalid format",
-                        "confidence": 0
-                    }
-
-        else:  # Claude
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={
-                        "x-api-key": API_KEYS["ANTHROPIC"],
-                        "anthropic-version": "2023-06-01",
-                        "Content-Type": "application/json"
-                    },
-                    json={
-                        "model": "claude-3-sonnet-20240229",
-                        "max_tokens": 150,
-                        "messages": [{
-                            "role": "user",
-                            "content": f"Answer this question and format the response exactly like this example, nothing else: {{'answer': 'ampere', 'explanation': 'Current is measured in amperes (A)', 'confidence': 95}}\n\nQuestion: {request.text}"
-                        }]
-                    }
-                )
-
-                if response.status_code != 200:
-                    raise HTTPException(status_code=response.status_code, detail="Anthropic API error")
-
-                response_content = response.json()["content"][0]["text"]
-                try:
-                    # Handle both string and dict responses
-                    if isinstance(response_content, dict):
-                        result = response_content
-                    else:
-                        # Remove any potential leading/trailing whitespace
-                        response_content = response_content.strip()
-                        # Parse the string response
-                        result = json.loads(response_content)
-
-                    # Ensure required fields exist
-                    if not all(key in result for key in ['answer', 'explanation', 'confidence']):
-                        raise ValueError("Missing required fields in response")
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse Claude response: {response_content}")
-                    result = {
-                        "answer": "Error parsing response",
-                        "explanation": "The model returned an invalid format",
-                        "confidence": 0
-                    }
-
-        # Deduct credits if not free tier
+        # Update user credits if not free tier
         if not user.get("is_free_tier"):
             user["credits"] -= cost
             update_user(user)
 
         # Log usage
-        with open(USAGE_FILE) as f:
-            usage = json.load(f)
-        usage["items"].append({
-            "user_id": user["id"],
-            "timestamp": datetime.utcnow().isoformat(),
-            "model": request.model,
-            "cost": cost,
-            "chars": len(request.text)
-        })
-        with open(USAGE_FILE, "w") as f:
-            json.dump(usage, f)
+        log_usage(user["id"], model, chars, cost)
 
         return {
             "response": result,
@@ -1854,11 +1762,119 @@ async def solve_question(request: SolveRequest, auth: HTTPAuthorizationCredentia
             "cached": False
         }
 
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
     except Exception as e:
         logger.error(f"Error in solve_question: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+async def handle_gpt_question(text: str, model: str) -> dict:
+    """Handle GPT model requests"""
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {API_KEYS['OPENAI']}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "gpt-4-1106-preview" if model == "gpt4o" else "gpt-4-turbo-preview",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are an expert at answering questions. Provide your response as a valid JSON object with exactly these three fields: 'answer' (a concise answer), 'explanation' (a brief explanation), and 'confidence' (a number 0-100)."
+                    },
+                    {
+                        "role": "user",
+                        "content": text
+                    }
+                ],
+                "response_format": {"type": "json_object"}
+            }
+        )
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail="OpenAI API error")
+
+        return response.json()["choices"][0]["message"]["content"]
+
+async def handle_claude_question(text: str) -> dict:
+    """Handle Claude model requests"""
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": API_KEYS["ANTHROPIC"],
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "claude-3-sonnet-20240229",
+                "max_tokens": 150,
+                "system": "You are an expert at answering questions. Format your responses exactly as JSON with fields: answer (concise), explanation (brief), and confidence (0-100).",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": text
+                    }
+                ]
+            }
+        )
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail="Anthropic API error")
+
+        result = response.json()
+        try:
+            return json.loads(result["content"][0]["text"])
+        except (json.JSONDecodeError, KeyError):
+            # Fallback response if parsing fails
+            return {
+                "answer": "Error parsing response",
+                "explanation": "The model returned an invalid format",
+                "confidence": 0
+            }
+
+async def handle_gemini_question(text: str, model: str) -> dict:
+    """Handle Gemini model requests"""
+    genai.configure(api_key=API_KEYS["GEMINI"])
+    model_instance = genai.GenerativeModel(model)
+    
+    prompt = f"""Answer this question as a JSON object with exactly these fields:
+    - answer: a concise answer
+    - explanation: a brief explanation
+    - confidence: a number from 0-100
+    
+    Question: {text}"""
+
+    response = await model_instance.generate_content(prompt)
+    
+    try:
+        return json.loads(response.text)
+    except (json.JSONDecodeError, AttributeError):
+        return {
+            "answer": "Error parsing response",
+            "explanation": "The model returned an invalid format",
+            "confidence": 0
+        }
+
+@app.post("/api/login")
+async def login(request: LoginRequest):
+    """Enhanced login endpoint with proper response handling"""
+    user = get_user(request.username)
+    if not user or user["password_hash"] != hashlib.sha256(request.password.encode()).hexdigest():
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Create token
+    token = create_access_token(user["username"])
+    
+    return {
+        "token": token,
+        "user": {
+            "username": user["username"],
+            "credits": user["credits"],
+            "is_admin": user.get("is_admin", False),
+            "is_free_tier": user.get("is_free_tier", False)
+        }
+    }
 
 @app.get("/api/admin/users/{user_id}/usage")
 async def get_user_usage(user_id: str, auth: HTTPAuthorizationCredentials = Depends(security)):
