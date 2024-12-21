@@ -1,5 +1,5 @@
 javascript:(function(){
-  const API_BASE = 'https://5b7a0633-a297-4047-b0ee-a4bde446805d-00-1ntphoomm251x.kirk.replit.dev'; // Change this to your server URL
+  const API_BASE = 'flask-production-05c4.up.railway.app'; // Change this to your server URL
   // Auth state
   const FREE_TIER_DAILY_LIMIT = 8;
 
