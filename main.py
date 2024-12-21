@@ -1087,60 +1087,109 @@ async def serve_expansionai_interface():
                 this.els.credits.textContent = `Credits: ${credits.toFixed(2)}`;
             }
 
-            async sendMessage() {
-                const content = this.els.messageInput.value.trim();
-                if (!content && !this.files.length) return;
+async function sendMessage() {
+    const content = messageInput.value.trim();
+    if (!content && !files.length) return;
 
-                this.addMessage('user', content);
-                this.els.messageInput.value = '';
+    // Disable UI elements while processing
+    sendBtn.disabled = true;
+    messageInput.disabled = true;
+    modelSelect.disabled = true;
 
-                try {
-                    const formData = new FormData();
-                    formData.append('text', content);
-                    formData.append('model', this.els.modelSelect.value);
-                    this.files.forEach(file => formData.append('files', file));
+    try {
+        // Add user message to chat
+        addMessage('user', content);
+        messageInput.value = '';
 
-                    const response = await fetch('/api/aii/chat', {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                        body: formData
-                    });
+        // Prepare form data
+        const formData = new FormData();
+        formData.append('text', content);
+        formData.append('model', modelSelect.value);
+        files.forEach(file => formData.append('files', file));
 
-                    if (response.ok) {
-                        const data = await response.json();
-                        this.addMessage('assistant', data.response);
-                        if (data.usage?.cost) {
-                            const creditsResponse = await fetch('/api/aii/credits', {
-                                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                            });
-                            if (creditsResponse.ok) {
-                                const creditsData = await creditsResponse.json();
-                                this.updateCredits(creditsData.credits);
-                            }
-                        }
-                    } else if (response.status === 401) {
-                        this.logout();
-                    }
-                } catch (error) {
-                    this.addMessage('assistant', 'Sorry, something went wrong. Please try again.');
+        // Send request
+        const response = await fetch('/api/aii/chat', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: formData
+        });
+
+        // Handle different response status codes
+        if (response.status === 401) {
+            // Token expired or invalid
+            localStorage.removeItem('token');
+            window.location.reload();
+            return;
+        }
+
+        if (response.status === 402) {
+            addMessage('assistant', 'Insufficient credits. Please add more credits to continue.');
+            return;
+        }
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        // Process successful response
+        const data = await response.json();
+        
+        // Add AI response to chat
+        addMessage('assistant', data.response);
+
+        // Update credits if provided
+        if (data.usage?.cost) {
+            const creditsResponse = await fetch('/api/aii/credits', {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
                 }
-
-                this.clearFiles();
+            });
+            if (creditsResponse.ok) {
+                const creditsData = await creditsResponse.json();
+                updateCredits(creditsData.credits);
             }
+        }
 
-            addMessage(role, content) {
-                const div = document.createElement('div');
-                div.className = `message-enter flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
-                div.innerHTML = `
-                    <div class="max-w-[80%] ${role === 'user' ? 'bg-blue-600/30' : 'bg-gray-800/30'} rounded-2xl p-4">
-                        <div class="text-sm text-gray-400 mb-1">${role === 'user' ? 'You' : 'AI'}</div>
-                        <div>${content}</div>
-                    </div>
-                `;
-                this.els.messages.appendChild(div);
-                this.els.messages.scrollTop = this.els.messages.scrollHeight;
-            }
+        // Clear any uploaded files
+        clearFiles();
 
+    } catch (error) {
+        console.error('Error in sendMessage:', error);
+        addMessage(
+            'assistant', 
+            'Sorry, something went wrong. Please try again or contact support if the problem persists.'
+        );
+    } finally {
+        // Re-enable UI elements
+        sendBtn.disabled = false;
+        messageInput.disabled = false;
+        modelSelect.disabled = false;
+    }
+}
+
+// Helper function to add a message to the chat
+function addMessage(role, content) {
+    const div = document.createElement('div');
+    div.className = `message-enter flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+    div.innerHTML = `
+        <div class="max-w-[80%] ${role === 'user' ? 'bg-blue-600/30' : 'bg-gray-800/30'} rounded-2xl p-4">
+            <div class="text-sm text-gray-400 mb-1">${role === 'user' ? 'You' : 'AI'}</div>
+            <div>${content}</div>
+        </div>
+    `;
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+}
+
+// Helper function to update credits display
+function updateCredits(credits) {
+    const creditsElement = document.getElementById('credits');
+    if (creditsElement) {
+        creditsElement.textContent = `Credits: ${credits.toFixed(2)}`;
+    }
+}
             handleUpload() {
                 const input = document.createElement('input');
                 input.type = 'file';
