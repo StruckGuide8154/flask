@@ -903,637 +903,283 @@ async def handle_gemini(
 async def serve_expansionai_interface():
     """Serve the ExpansionAI interface"""
     html_content = """<!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Interface</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <title>AI Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-tomorrow.min.css" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
-        
-        .chat-container {
-            height: calc(100vh - 180px);
-            background: radial-gradient(circle at top, #1a1a1a, #0a0a0a);
-        }
-
-        .message {
-            max-width: 85%;
-            animation: fadeIn 0.3s ease-in;
-        }
-
-        .user-message {
-            background: rgba(59, 130, 246, 0.1);
-            border: 1px solid rgba(59, 130, 246, 0.2);
-        }
-
-        .ai-message {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .code-block {
-            background: #1a1a1a;
-            border-radius: 0.5rem;
-            margin: 1rem 0;
-        }
-
-        .model-badge {
-            font-size: 0.75rem;
-            padding: 0.25rem 0.5rem;
-            border-radius: 9999px;
-            background: rgba(59, 130, 246, 0.1);
-            color: #60A5FA;
-        }
-
-        .typing-dots {
-            display: flex;
-            gap: 4px;
-            padding: 8px;
-        }
-
-        .dot {
-            width: 4px;
-            height: 4px;
-            background: #60A5FA;
-            border-radius: 50%;
-            animation: bounce 1.4s infinite;
-        }
-
-        .dot:nth-child(2) { animation-delay: 0.2s; }
-        .dot:nth-child(3) { animation-delay: 0.4s; }
-
-        @keyframes bounce {
-            0%, 60%, 100% { transform: translateY(0); }
-            30% { transform: translateY(-4px); }
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* File upload area */
-        .file-drop-area {
-            border: 2px dashed rgba(59, 130, 246, 0.4);
-            border-radius: 0.5rem;
-            background: rgba(59, 130, 246, 0.05);
-            transition: all 0.3s ease;
-        }
-
-        .file-drop-area.drag-over {
-            border-color: #60A5FA;
-            background: rgba(59, 130, 246, 0.1);
-        }
-
-        /* Scrollbar styling */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #1a1a1a;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #374151;
-            border-radius: 3px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #4B5563;
-        }
+        .glass { backdrop-filter: blur(12px); background: rgba(17, 25, 40, 0.75); }
+        .chat-bg { background: linear-gradient(45deg, #0f172a, #1e293b); }
+        .message-enter { animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-100">
-    <div class="container mx-auto px-4 py-8">
+<body class="chat-bg min-h-screen text-gray-100">
+    <!-- Login Modal -->
+    <div id="loginModal" class="fixed inset-0 flex items-center justify-center z-50 p-4 bg-black bg-opacity-50">
+        <div class="glass p-8 rounded-2xl shadow-xl max-w-md w-full">
+            <h2 class="text-2xl font-bold mb-6">Welcome Back</h2>
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Username</label>
+                    <input type="text" id="username" class="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-700 focus:border-blue-500 focus:ring-1">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Password</label>
+                    <input type="password" id="password" class="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-700 focus:border-blue-500 focus:ring-1">
+                </div>
+                <button type="submit" class="w-full py-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors">
+                    Login
+                </button>
+                <div id="loginError" class="text-red-500 text-sm hidden"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Chat Interface -->
+    <div id="chatInterface" class="hidden container mx-auto px-4 py-6 max-w-6xl">
         <!-- Header -->
-        <div class="flex justify-between items-center mb-6">
-            <div class="flex items-center space-x-4">
-                <select id="model-select" class="bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700">
-                    <optgroup label="Fast Models">
-                        <option value="gemini-flash-8b">Gemini Flash 8B - Quick Summarization</option>
-                        <option value="gemini-flash">Gemini Flash - Multimedia</option>
-                        <option value="gemini-pro">Gemini Pro - Complex Tasks</option>
-                        <option value="gemini-pro-2">Gemini Pro 2 - Advanced Tasks</option>
-                    </optgroup>
-                    <optgroup label="Balanced Models">
-                        <option value="gpt4o-mini">GPT-4 Mini - Daily Tasks</option>
-                        <option value="gpt4o">GPT-4 Opus - Reasoning</option>
-                    </optgroup>
-                    <optgroup label="Advanced Models">
-                        <option value="claude-haiku">Claude Haiku - Versatile</option>
-                        <option value="claude-opus">Claude Opus - English Expert</option>
-                        <option value="claude-sonnet" selected>Claude Sonnet - Most Capable</option>
-                    </optgroup>
+        <div class="glass rounded-2xl p-4 mb-6 flex justify-between items-center">
+            <div class="flex gap-4 items-center">
+                <select id="modelSelect" class="bg-gray-800 px-4 py-2 rounded-lg border border-gray-700">
+                    <option value="gpt4o-mini">GPT-4 Mini (Fast)</option>
+                    <option value="gpt4o">GPT-4 (Smart)</option>
+                    <option value="claude-opus">Claude (Creative)</option>
                 </select>
-
-                <div class="text-sm text-gray-400" id="credits-display"></div>
+                <div id="credits" class="text-blue-400"></div>
             </div>
-
-            <div class="flex items-center space-x-4">
-                <button id="clear-chat" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors">
-                    Clear Chat
-                </button>
-                <button id="export-chat" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors">
-                    Export Chat
-                </button>
+            <div class="flex gap-4">
+                <button id="clearBtn" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg">Clear</button>
+                <button id="logoutBtn" class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg">Logout</button>
             </div>
         </div>
 
-        <!-- Chat Area -->
-        <div class="chat-container rounded-lg overflow-hidden flex flex-col">
-            <!-- Messages -->
-            <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-4">
-                <!-- Messages will be added here -->
-            </div>
+        <!-- Messages -->
+        <div id="messages" class="glass rounded-2xl p-6 mb-6 h-[60vh] overflow-y-auto space-y-6"></div>
 
-            <!-- Input Area -->
-            <div class="p-4 bg-gray-800 border-t border-gray-700">
-                <!-- File Drop Area -->
-                <div id="file-drop-area" class="file-drop-area mb-4 p-4 text-center hidden">
-                    <p class="text-gray-400">Drop files here or click to upload</p>
-                </div>
-
-                <!-- File Previews -->
-                <div id="file-previews" class="flex flex-wrap gap-2 mb-4"></div>
-
-                <div class="flex space-x-4">
-                    <div class="flex-1 relative">
-                        <textarea
-                            id="message-input"
-                            class="w-full bg-gray-900 text-white rounded-lg px-4 py-3 resize-none border border-gray-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                            placeholder="Type your message..."
-                            rows="3"
-                        ></textarea>
-
-                        <div class="absolute bottom-3 right-3 flex space-x-2">
-                            <button id="upload-btn" class="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
-                                </svg>
-                            </button>
-                            <button id="image-btn" class="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-
-                    <button
-                        id="send-btn"
-                        class="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-lg text-white font-medium transition-colors flex items-center space-x-2"
-                    >
-                        <span>Send</span>
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
-                        </svg>
+        <!-- Input Area -->
+        <div class="glass rounded-2xl p-4">
+            <div id="filePreviews" class="flex flex-wrap gap-2 mb-4"></div>
+            <div class="flex gap-4">
+                <div class="flex-1 relative">
+                    <textarea id="messageInput" rows="3" 
+                        class="w-full bg-gray-800/50 rounded-lg px-4 py-3 resize-none focus:ring-1"
+                        placeholder="Type your message..."></textarea>
+                    <button id="uploadBtn" class="absolute bottom-3 right-3 p-2 hover:bg-gray-700 rounded-lg">
+                        📎
                     </button>
                 </div>
+                <button id="sendBtn" class="px-6 self-end py-3 bg-blue-600 hover:bg-blue-500 rounded-lg flex items-center gap-2">
+                    Send
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                    </svg>
+                </button>
             </div>
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/prism.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.0.2/marked.min.js"></script>
-
     <script>
-        class AIChat {
+        class Chat {
             constructor() {
-                this.messageInput = document.getElementById('message-input');
-                this.sendButton = document.getElementById('send-btn');
-                this.messagesContainer = document.getElementById('messages');
-                this.modelSelect = document.getElementById('model-select');
-                this.uploadBtn = document.getElementById('upload-btn');
-                this.imageBtn = document.getElementById('image-btn');
-                this.clearChatBtn = document.getElementById('clear-chat');
-                this.exportChatBtn = document.getElementById('export-chat');
-                this.fileDropArea = document.getElementById('file-drop-area');
-                this.filePreviews = document.getElementById('file-previews');
-                this.creditsDisplay = document.getElementById('credits-display');
-
-                this.files = [];
-                this.messages = [];
-                this.isProcessing = false;
-
-                this.initializeEventListeners();
+                this.setupElements();
+                this.setupEvents();
                 this.checkAuth();
             }
 
-            async checkAuth() {
-                const token = localStorage.getItem('token');
-                if (!token) {
-                    await this.handleLogin();
-                } else {
-                    try {
-                        const response = await fetch('/api/verify', {
-                            headers: {
-                                'Authorization': `Bearer ${token}`
-                            }
-                        });
-                        if (!response.ok) {
-                            await this.handleLogin();
-                        } else {
-                            this.loadUserInfo();
-                            this.showWelcomeMessage();
-                        }
-                    } catch (error) {
-                        await this.handleLogin();
-                    }
-                }
+            setupElements() {
+                this.els = {
+                    loginModal: document.getElementById('loginModal'),
+                    loginForm: document.getElementById('loginForm'),
+                    loginError: document.getElementById('loginError'),
+                    chatInterface: document.getElementById('chatInterface'),
+                    messages: document.getElementById('messages'),
+                    messageInput: document.getElementById('messageInput'),
+                    modelSelect: document.getElementById('modelSelect'),
+                    credits: document.getElementById('credits'),
+                    filePreviews: document.getElementById('filePreviews'),
+                    sendBtn: document.getElementById('sendBtn'),
+                    uploadBtn: document.getElementById('uploadBtn'),
+                    clearBtn: document.getElementById('clearBtn'),
+                    logoutBtn: document.getElementById('logoutBtn')
+                };
+                this.files = [];
             }
 
-            async handleLogin() {
-                const username = prompt('Enter username:');
-                const password = prompt('Enter password:');
-
-                try {
-                    const response = await fetch('/api/login', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ username, password })
-                    });
-
-                    if (!response.ok) {
-                        throw new Error('Login failed');
-                    }
-
-                    const data = await response.json();
-                    localStorage.setItem('token', data.token);
-                    this.loadUserInfo();
-                    this.showWelcomeMessage();
-                } catch (error) {
-                    alert('Login failed. Please refresh and try again.');
-                }
-            }
-
-            async loadUserInfo() {
-                try {
-                    const response = await fetch('/api/aii/credits', {
-                        headers: {
-                            'Authorization': `Bearer ${localStorage.getItem('token')}`
-                        }
-                    });
-                    if (response.ok) {
-                        const data = await response.json();
-                        this.updateCreditsDisplay(data.credits);
-                    }
-                } catch (error) {
-                    console.error('Error loading user info:', error);
-                }
-            }
-
-            updateCreditsDisplay(credits) {
-                this.creditsDisplay.textContent = `Credits: ${credits.toFixed(2)}`;
-            }
-
-            initializeEventListeners() {
-                this.sendButton.addEventListener('click', () => this.sendMessage());
-                this.messageInput.addEventListener('keydown', (e) => {
+            setupEvents() {
+                this.els.loginForm.onsubmit = (e) => this.handleLogin(e);
+                this.els.sendBtn.onclick = () => this.sendMessage();
+                this.els.uploadBtn.onclick = () => this.handleUpload();
+                this.els.clearBtn.onclick = () => this.clearChat();
+                this.els.logoutBtn.onclick = () => this.logout();
+                this.els.messageInput.onkeydown = (e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
                         this.sendMessage();
                     }
-                });
-
-                this.uploadBtn.addEventListener('click', () => this.handleFileUpload());
-                this.imageBtn.addEventListener('click', () => this.handleImageUpload());
-                this.clearChatBtn.addEventListener('click', () => this.clearChat());
-                this.exportChatBtn.addEventListener('click', () => this.exportChat());
-
-                // File drag and drop
-                this.initializeFileDragDrop();
-            }
-
-            initializeFileDragDrop() {
-                const dropArea = document.getElementById('file-drop-area');
-
-                ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                    document.addEventListener(eventName, (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                    });
-                });
-
-                ['dragenter', 'dragover'].forEach(eventName => {
-                    dropArea.addEventListener(eventName, () => {
-                        dropArea.classList.add('drag-over');
-                    });
-                });
-
-                ['dragleave', 'drop'].forEach(eventName => {
-                    dropArea.addEventListener(eventName, () => {
-                        dropArea.classList.remove('drag-over');
-                    });
-                });
-
-                dropArea.addEventListener('drop', (e) => {
-                    const files = Array.from(e.dataTransfer.files);
-                    this.handleFiles(files);
-                });
-            }
-
-            showWelcomeMessage() {
-                const welcomeMessage = {
-                    role: 'assistant',
-                    content: `Welcome! I'm here to help with:
-                    - Text analysis and generation
-                    - Code understanding and creation
-                    - Image and document analysis
-                    - Complex problem solving
-                    
-                    Feel free to select a model and start chatting!`,
-                    model: this.modelSelect.value
                 };
-                this.addMessage(welcomeMessage);
+            }
+
+            async checkAuth() {
+                const token = localStorage.getItem('token');
+                if (!token) return;
+                try {
+                    const response = await fetch('/api/aii/credits', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.showChat();
+                        this.updateCredits(data.credits);
+                        this.addMessage('assistant', 'Welcome back! How can I help you today?');
+                    }
+                } catch (error) {
+                    localStorage.removeItem('token');
+                }
+            }
+
+            async handleLogin(e) {
+                e.preventDefault();
+                try {
+                    const response = await fetch('/api/aii/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            username: this.els.loginForm.username.value,
+                            password: this.els.loginForm.password.value
+                        })
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        localStorage.setItem('token', data.token);
+                        this.showChat();
+                        this.updateCredits(data.user.credits);
+                        this.addMessage('assistant', 'Welcome! How can I help you today?');
+                    } else {
+                        this.els.loginError.textContent = 'Invalid credentials';
+                        this.els.loginError.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    this.els.loginError.textContent = 'Login failed';
+                    this.els.loginError.classList.remove('hidden');
+                }
+            }
+
+            showChat() {
+                this.els.loginModal.classList.add('hidden');
+                this.els.chatInterface.classList.remove('hidden');
+            }
+
+            updateCredits(credits) {
+                this.els.credits.textContent = `Credits: ${credits.toFixed(2)}`;
             }
 
             async sendMessage() {
-                if (this.isProcessing) return;
-                
-                const content = this.messageInput.value.trim();
-                if (!content && this.files.length === 0) return;
+                const content = this.els.messageInput.value.trim();
+                if (!content && !this.files.length) return;
 
-                this.isProcessing = true;
-
-                // Add user message
-                this.addMessage({
-                    role: 'user',
-                    content,
-                    files: this.files
-                });
-
-                this.messageInput.value = '';
-                this.showTypingIndicator();
+                this.addMessage('user', content);
+                this.els.messageInput.value = '';
 
                 try {
                     const formData = new FormData();
                     formData.append('text', content);
-                    formData.append('model', this.modelSelect.value);
-                    formData.append('stream', 'true');
-                    
-                    // Add files if any
-                    this.files.forEach(file => {
-                        formData.append('files', file);
-                    });
-
-                    // Add history
-                    formData.append('history', JSON.stringify(this.messages.slice(-10)));
+                    formData.append('model', this.els.modelSelect.value);
+                    this.files.forEach(file => formData.append('files', file));
 
                     const response = await fetch('/api/aii/chat', {
                         method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${localStorage.getItem('token')}`
-                        },
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                         body: formData
                     });
 
-                    if (!response.ok) {
-                        throw new Error('API request failed');
-                    }
-
-                    const data = await response.json();
-                    
-                    // Add AI response
-                    this.addMessage({
-                        role: 'assistant',
-                        content: data.response,
-                        model: this.modelSelect.value
-                    });
-
-                    // Update credits if available
-                    if (data.usage?.cost) {
-                        const currentCredits = parseFloat(this.creditsDisplay.textContent.split(':')[1]);
-                        this.updateCreditsDisplay(currentCredits - data.usage.cost);
-                    }
-
-                } catch (error) {
-                    console.error('Error:', error);
-                    this.showError('Failed to send message');
-                } finally {
-                    this.isProcessing = false;
-                    this.hideTypingIndicator();
-                    this.clearFiles();
-                }
-            }
-
-            addMessage(message) {
-                const messageDiv = document.createElement('div');
-                messageDiv.className = `message ${message.role}-message rounded-lg p-4 ${message.role === 'user' ? 'ml-auto' : 'mr-auto'}`;
-                
-                let html = `
-                    <div class="flex ${message.role === 'user' ? 'flex-row-reverse' : ''} items-start space-x-3">
-                        <div class="w-8 h-8 rounded-lg ${message.role === 'user' ? 'bg-blue-600' : 'bg-gray-700'} flex items-center justify-center">
-                            ${message.role === 'user' ? 'U' : 'AI'}
-                        </div>
-                        <div class="space-y-1">
-                            <div class="flex items-center space-x-2 ${message.role === 'user' ? 'justify-end' : ''}">
-                                <span class="font-medium">${message.role === 'user' ? 'You' : 'AI'}</span>
-                                ${message.model ? `<span class="model-badge">${message.model}</span>` : ''}
-                            </div>`;
-
-                // Add file previews if present
-                if (message.files?.length > 0) {
-                    html += '<div class="flex flex-wrap gap-2 mt-2">';
-                    message.files.forEach(file => {
-                        if (file.type.startsWith('image/')) {
-                            html += `<img src="${URL.createObjectURL(file)}" alt="${file.name}" class="h-20 w-20 object-cover rounded">`;
-                        } else {
-                            html += `<div class="p-2 bg-gray-800 rounded flex items-center">
-                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                                </svg>
-                                <span class="text-sm">${file.name}</span>
-                            </div>`;
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.addMessage('assistant', data.response);
+                        if (data.usage?.cost) {
+                            const creditsResponse = await fetch('/api/aii/credits', {
+                                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                            });
+                            if (creditsResponse.ok) {
+                                const creditsData = await creditsResponse.json();
+                                this.updateCredits(creditsData.credits);
+                            }
                         }
-                    });
-                    html += '</div>';
-                }
-
-                // Add message content with markdown support
-                html += `<div class="prose prose-invert max-w-none">${this.formatContent(message.content)}</div>`;
-                html += '</div></div>';
-                
-                messageDiv.innerHTML = html;
-                this.messagesContainer.appendChild(messageDiv);
-                this.scrollToBottom();
-
-                // Initialize code highlighting
-                if (messageDiv.querySelector('pre code')) {
-                    Prism.highlightAllUnder(messageDiv);
-                }
-
-                // Store message in history
-                this.messages.push({
-                    role: message.role,
-                    content: message.content
-                });
-            }
-
-            formatContent(content) {
-                if (!content) return '';
-                
-                // Convert markdown to HTML
-                let html = marked.parse(content);
-
-                // Add copy button to code blocks
-                html = html.replace(/<pre><code class="language-(\w+)">([\s\S]*?)<\/code><\/pre>/g, 
-                    (_, lang, code) => `
-                    <div class="code-block relative group">
-                        <div class="flex items-center justify-between p-2 bg-gray-800 border-b border-gray-700">
-                            <span class="text-xs text-gray-400">${lang}</span>
-                            <button class="opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 bg-gray-700 rounded text-xs"
-                                onclick="navigator.clipboard.writeText(this.parentElement.parentElement.querySelector('code').textContent)">
-                                Copy
-                            </button>
-                        </div>
-                        <pre class="bg-gray-800 rounded-b"><code class="language-${lang}">${code}</code></pre>
-                    </div>`
-                );
-
-                return html;
-            }
-
-            showTypingIndicator() {
-                const indicator = document.createElement('div');
-                indicator.className = 'typing-dots';
-                indicator.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
-                this.messagesContainer.appendChild(indicator);
-                this.scrollToBottom();
-            }
-
-            hideTypingIndicator() {
-                const indicator = this.messagesContainer.querySelector('.typing-dots');
-                if (indicator) indicator.remove();
-            }
-
-            async handleFiles(files) {
-                const allowedTypes = {
-                    'image': ['jpeg', 'png', 'gif', 'webp'],
-                    'text': ['plain', 'javascript', 'python', 'json', 'html', 'css'],
-                    'application': ['pdf', 'json']
-                };
-
-                for (const file of files) {
-                    const [type, subtype] = file.type.split('/');
-                    if (allowedTypes[type]?.includes(subtype)) {
-                        this.files.push(file);
-                        await this.addFilePreview(file);
+                    } else if (response.status === 401) {
+                        this.logout();
                     }
+                } catch (error) {
+                    this.addMessage('assistant', 'Sorry, something went wrong. Please try again.');
                 }
+
+                this.clearFiles();
             }
 
-            async addFilePreview(file) {
-                const preview = document.createElement('div');
-                preview.className = 'p-2 bg-gray-800 rounded-lg flex items-center space-x-2';
-                
-                if (file.type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    const imageUrl = await new Promise(resolve => {
-                        reader.onload = e => resolve(e.target.result);
-                        reader.readAsDataURL(file);
+            addMessage(role, content) {
+                const div = document.createElement('div');
+                div.className = `message-enter flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+                div.innerHTML = `
+                    <div class="max-w-[80%] ${role === 'user' ? 'bg-blue-600/30' : 'bg-gray-800/30'} rounded-2xl p-4">
+                        <div class="text-sm text-gray-400 mb-1">${role === 'user' ? 'You' : 'AI'}</div>
+                        <div>${content}</div>
+                    </div>
+                `;
+                this.els.messages.appendChild(div);
+                this.els.messages.scrollTop = this.els.messages.scrollHeight;
+            }
+
+            handleUpload() {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.multiple = true;
+                input.accept = 'image/*,.pdf,.txt';
+                input.onchange = (e) => {
+                    Array.from(e.target.files).forEach(file => {
+                        this.files.push(file);
+                        this.addFilePreview(file);
                     });
-
-                    preview.innerHTML = `
-                        <img src="${imageUrl}" alt="${file.name}" class="h-8 w-8 object-cover rounded">
-                        <span class="text-sm">${file.name}</span>
-                        <button class="text-gray-400 hover:text-white">×</button>
-                    `;
-                } else {
-                    preview.innerHTML = `
-                        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                                d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                        </svg>
-                        <span class="text-sm">${file.name}</span>
-                        <button class="text-gray-400 hover:text-white">×</button>
-                    `;
-                }
-
-                preview.querySelector('button').onclick = () => {
-                    this.removeFile(file);
-                    preview.remove();
                 };
-
-                this.filePreviews.appendChild(preview);
-            }
-
-            handleFileUpload() {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = '.txt,.js,.py,.json,.html,.css,.pdf';
-                input.multiple = true;
-                input.onchange = () => this.handleFiles(Array.from(input.files));
                 input.click();
             }
 
-            handleImageUpload() {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = 'image/*';
-                input.multiple = true;
-                input.onchange = () => this.handleFiles(Array.from(input.files));
-                input.click();
-            }
-
-            removeFile(file) {
-                const index = this.files.indexOf(file);
-                if (index > -1) {
-                    this.files.splice(index, 1);
-                }
+            addFilePreview(file) {
+                const div = document.createElement('div');
+                div.className = 'bg-gray-800/50 rounded-lg p-2 flex items-center gap-2';
+                div.innerHTML = `
+                    <span class="text-sm">${file.name}</span>
+                    <button class="text-gray-400 hover:text-white">×</button>
+                `;
+                div.querySelector('button').onclick = () => {
+                    this.files = this.files.filter(f => f !== file);
+                    div.remove();
+                };
+                this.els.filePreviews.appendChild(div);
             }
 
             clearFiles() {
                 this.files = [];
-                this.filePreviews.innerHTML = '';
+                this.els.filePreviews.innerHTML = '';
             }
 
             clearChat() {
-                this.messages = [];
-                this.messagesContainer.innerHTML = '';
-                this.showWelcomeMessage();
+                this.els.messages.innerHTML = '';
+                this.addMessage('assistant', 'Chat cleared. How can I help you?');
             }
 
-            exportChat() {
-                const chatHistory = {
-                    timestamp: new Date().toISOString(),
-                    messages: this.messages
-                };
-
-                const blob = new Blob([JSON.stringify(chatHistory, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `chat-history-${new Date().toISOString()}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }
-
-            scrollToBottom() {
-                this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
-            }
-
-            showError(message) {
-                const errorDiv = document.createElement('div');
-                errorDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded shadow-lg';
-                errorDiv.textContent = message;
-                document.body.appendChild(errorDiv);
-                setTimeout(() => errorDiv.remove(), 3000);
+            logout() {
+                localStorage.removeItem('token');
+                location.reload();
             }
         }
 
-        // Initialize the chat application
-        document.addEventListener('DOMContentLoaded', () => {
-            const chat = new AIChat();
-        });</script></body></html>"""
+        new Chat();
+    </script>
+</body>
+</html>"""
     return HTMLResponse(content=html_content)
 
 
