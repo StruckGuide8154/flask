@@ -426,14 +426,288 @@
                     initializeApp();
                 }
             } catch (error) {
-                console.error('Login failed:', error);
+                console.error('Initialization failed:', error);
             }
         }
 
-        async function initializeApp() {
+        function setupEventListeners() {
+            const messageInput = document.getElementById('messageInput');
+            const fileInput = document.getElementById('fileInput');
+
+            messageInput.addEventListener('keydown', e => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+
+            fileInput.addEventListener('change', handleFileUpload);
+        }
+
+        function autoResize(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+        }
+
+        // Chat Management
+        async function loadChats() {
             try {
-                await loadChats();
-                await startNewChat();
-                setupEventListeners();
+                const response = await fetch('/api/chats', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load chats');
+                
+                const chats = await response.json();
+                const chatList = document.getElementById('chatList');
+                chatList.innerHTML = '';
+                
+                chats.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                     .forEach(chat => {
+                        const item = document.createElement('div');
+                        item.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
+                        
+                        const title = chat.messages?.[0]?.content?.substring(0, 30) || 'New Chat';
+                        
+                        item.innerHTML = `
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            <span>${title}${title.length > 30 ? '...' : ''}</span>
+                        `;
+                        
+                        item.onclick = () => loadChat(chat.id);
+                        chatList.appendChild(item);
+                    });
             } catch (error) {
-                console.error('
+                console.error('Failed to load chats:', error);
+            }
+        }
+
+        async function startNewChat() {
+            try {
+                const response = await fetch('/api/chats', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) throw new Error('Failed to create chat');
+                
+                const chat = await response.json();
+                currentChatId = chat.id;
+                messageHistory = [];
+                document.getElementById('messages').innerHTML = '';
+                await loadChats();
+            } catch (error) {
+                console.error('Failed to start new chat:', error);
+            }
+        }
+
+        async function loadChat(chatId) {
+            try {
+                const response = await fetch(`/api/chats/${chatId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load chat');
+                
+                const chat = await response.json();
+                currentChatId = chatId;
+                messageHistory = chat.messages || [];
+                
+                const messagesContainer = document.getElementById('messages');
+                messagesContainer.innerHTML = '';
+                
+                if (messageHistory.length) {
+                    messageHistory.forEach(msg => {
+                        appendMessage(msg.content, msg.role === 'user');
+                    });
+                }
+                
+                await loadChats();
+            } catch (error) {
+                console.error('Failed to load chat:', error);
+            }
+        }
+
+        // Message & File Handling
+        async function handleFileUpload(event) {
+            const files = event.target.files;
+            if (!files.length) return;
+
+            const maxSize = 5 * 1024 * 1024; // 5MB limit
+            const formData = new FormData();
+
+            for (let file of files) {
+                if (file.size > maxSize) continue;
+                formData.append('files', file);
+            }
+
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error('Upload failed');
+
+                const result = await response.json();
+                uploadedFiles = uploadedFiles.concat(result);
+                updateFilePreview();
+            } catch (error) {
+                console.error('File upload failed:', error);
+            }
+
+            event.target.value = '';
+        }
+
+        function updateFilePreview() {
+            const preview = document.getElementById('filePreview');
+            preview.innerHTML = '';
+
+            uploadedFiles.forEach((file, index) => {
+                if (file.type === 'image') {
+                    const item = document.createElement('div');
+                    item.className = 'preview-item';
+                    item.innerHTML = `
+                        <img src="${file.base64}" alt="Preview">
+                        <button class="remove-file" onclick="removeFile(${index})">×</button>
+                    `;
+                    preview.appendChild(item);
+                }
+            });
+        }
+
+        function removeFile(index) {
+            uploadedFiles.splice(index, 1);
+            updateFilePreview();
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message && !uploadedFiles.length) return;
+
+            const systemPrompt = `You are an AI assistant that can:
+- Write and format code with syntax highlighting
+- Create formatted documents using Markdown
+- Process and analyze files
+- Generate data visualizations
+Always format responses appropriately using markdown and code blocks.`;
+
+            try {
+                appendMessage(message, true);
+                input.value = '';
+                input.style.height = 'auto';
+
+                const response = await fetch('/api/chat/stream', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        chatId: currentChatId,
+                        message,
+                        files: uploadedFiles,
+                        model: document.getElementById('modelSelect').value,
+                        systemPrompt,
+                        history: messageHistory
+                    })
+                });
+
+                if (!response.ok) throw new Error('Failed to send message');
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let currentResponse = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = JSON.parse(line.slice(5));
+                            currentResponse += data.content;
+                            updateLastMessage(currentResponse);
+                        }
+                    }
+                }
+
+                messageHistory.push(
+                    { role: 'user', content: message },
+                    { role: 'assistant', content: currentResponse }
+                );
+
+                uploadedFiles = [];
+                updateFilePreview();
+            } catch (error) {
+                console.error('Failed to send message:', error);
+            }
+        }
+
+        function appendMessage(content, isUser) {
+            const messages = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user' : 'ai'}`;
+
+            if (isUser) {
+                let messageContent = content;
+                if (uploadedFiles.length) {
+                    const filesHtml = uploadedFiles.map(file => {
+                        if (file.type === 'image') {
+                            return `<img src="${file.base64}" alt="Upload" style="max-width: 200px; border-radius: 0.5rem; margin: 0.5rem 0;">`;
+                        }
+                        return `<div>[File: ${file.name}]</div>`;
+                    }).join('');
+                    messageContent = `${filesHtml}${content ? `<div>${content}</div>` : ''}`;
+                }
+                messageDiv.innerHTML = messageContent;
+            } else {
+                messageDiv.innerHTML = marked.parse(content);
+                messageDiv.querySelectorAll('pre code').forEach(block => {
+                    hljs.highlightBlock(block);
+                });
+            }
+
+            messages.appendChild(messageDiv);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        function updateLastMessage(content) {
+            const messages = document.getElementById('messages');
+            const lastMessage = messages.lastElementChild;
+            
+            if (lastMessage?.classList.contains('ai')) {
+                lastMessage.innerHTML = marked.parse(content);
+                lastMessage.querySelectorAll('pre code').forEach(block => {
+                    hljs.highlightBlock(block);
+                });
+                messages.scrollTop = messages.scrollHeight;
+            } else {
+                appendMessage(content, false);
+            }
+        }
+
+        // Check for existing token
+        window.onload = () => {
+            const savedToken = localStorage.getItem('token');
+            if (savedToken) {
+                token = savedToken;
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('app').style.display = 'grid';
+                initializeApp();
+            }
+        };
+    </script>
+</body>
+</html>
