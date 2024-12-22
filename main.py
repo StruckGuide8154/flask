@@ -310,7 +310,7 @@ async def stream_gpt(messages: List[dict], model: str):
                 "Content-Type": "application/json"
             },
             json={
-                "model": "gpt-4" if model == "gpt4o" else "gpt-3.5-turbo",
+                "model": "gpt-4o" if model == "gpt4o" else "gpt-4o-mini",
                 "messages": messages,
                 "stream": True
             },
