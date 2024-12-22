@@ -403,54 +403,64 @@ CLAUDE_MODELS = {
     "claude-haiku": "claude-3-5-haiku-20241022"
 }
 
+
+async def process_file_costs(files):
+    total_chars = 0
+    for file in files:
+        if file["type"] == "image":
+            # Base cost for each image (similar to Vision API)
+            total_chars += 1000  # Base char count for images
+    return total_chars
+
+
 @app.post("/api/chat/stream")
-async def stream_chat(
-    request: dict,
-    auth: HTTPAuthorizationCredentials = Depends(security)
-):
+async def stream_chat(request: dict, auth: HTTPAuthorizationCredentials = Depends(security)):
     try:
         payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=["HS256"])
         user = get_user(payload["user_id"])
         if not user:
             raise HTTPException(status_code=401, detail="Invalid user")
 
+        # Calculate costs including files
+        message_chars = len(request["message"])
+        file_chars = await process_file_costs(request.get("files", []))
+        total_chars = message_chars + file_chars
+        cost = calculate_cost(request["model"], total_chars) * 5  # 5x multiplier for Vision
+
+        if not user.get("is_free_tier") and user["credits"] < cost:
+            raise HTTPException(status_code=402, detail="Insufficient credits")
+
         # Format messages for Claude's API
         formatted_messages = []
         for msg in request.get("history", []):
-            if isinstance(msg["content"], dict) and "files" in msg["content"]:
-                # Handle messages with files
-                content = []
-                for file in msg["content"]["files"]:
-                    if file["type"] == "image":
-                        content.append({
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/jpeg",
-                                "data": file["base64"].split(",")[1]
-                            }
-                        })
-                content.append({
-                    "type": "text",
-                    "text": msg["content"]["text"]
-                })
-                formatted_messages.append({
-                    "role": msg["role"],
-                    "content": content
-                })
+            formatted_content = []
+            if isinstance(msg.get("content"), dict):
+                if "files" in msg["content"]:
+                    for file in msg["content"]["files"]:
+                        if file["type"] == "image":
+                            formatted_content.append({
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/jpeg",
+                                    "data": file["base64"].split(",")[1]
+                                }
+                            })
+                formatted_content.append({"type": "text", "text": msg["content"].get("text", "")})
             else:
-                # Handle text-only messages
-                formatted_messages.append({
-                    "role": msg["role"],
-                    "content": msg["content"]
-                })
+                formatted_content.append({"type": "text", "text": msg["content"]})
+            
+            formatted_messages.append({
+                "role": msg["role"],
+                "content": formatted_content
+            })
 
-        # Add current message
+        # Add current message with files
+        current_content = []
         if request.get("files"):
-            content = []
             for file in request["files"]:
                 if file["type"] == "image":
-                    content.append({
+                    current_content.append({
                         "type": "image",
                         "source": {
                             "type": "base64",
@@ -458,35 +468,37 @@ async def stream_chat(
                             "data": file["base64"].split(",")[1]
                         }
                     })
-            content.append({
-                "type": "text",
-                "text": request["message"]
-            })
-            formatted_messages.append({
-                "role": "user",
-                "content": content
-            })
-        else:
-            formatted_messages.append({
-                "role": "user",
-                "content": request["message"]
-            })
+        current_content.append({"type": "text", "text": request["message"]})
+        formatted_messages.append({
+            "role": "user",
+            "content": current_content
+        })
+
+        # Update user credits
+        if not user.get("is_free_tier"):
+            user["credits"] -= cost
+            update_user(user)
 
         # Stream based on model
-        if request["model"].startswith("gpt"):
-            stream = stream_gpt(formatted_messages, request["model"])
-        else:
-            stream = stream_claude(formatted_messages, request["model"])
+        stream = stream_claude(formatted_messages, request["model"])
+        
+        # Log usage
+        log_usage(user["id"], request["model"], cost, total_chars, "chat")
+
+        # Return StreamingResponse with cost metadata
+        async def enhanced_stream():
+            yield f"data: {json.dumps({'type': 'cost', 'cost': cost})}\n\n"
+            async for item in stream:
+                yield item
 
         return StreamingResponse(
-            stream,
+            enhanced_stream(),
             media_type="text/event-stream"
         )
 
     except Exception as e:
         logger.error(f"Error in stream_chat: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 # Routes
 @app.get("/admin")
