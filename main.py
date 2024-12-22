@@ -68,7 +68,43 @@ COSTS = {
     "gpt4o-mini": {"input": 0.00015, "output": 0.000075},
     "claude": {"input": 0.003, "output": 0.00375}
 }
-
+MODELS = {
+    'claude-3-opus-latest': {
+        'api_name': 'claude-3-opus-20240229',
+        'cost': {'input': 0.015, 'output': 0.075},
+        'supports_vision': True
+    },
+    'claude-3-sonnet-latest': {
+        'api_name': 'claude-3-5-sonnet-20241022',
+        'cost': {'input': 0.003, 'output': 0.015},
+        'supports_vision': True
+    },
+    'claude-3-haiku-latest': {
+        'api_name': 'claude-3-5-haiku-20241022',
+        'cost': {'input': 0.0015, 'output': 0.0075},
+        'supports_vision': True
+    },
+    'gpt4o': {
+        'api_name': 'gpt-4o',
+        'cost': {'input': 0.01, 'output': 0.03},
+        'supports_vision': True
+    },
+    'gpt4o-mini': {
+        'api_name': 'gpt-4o-mini',
+        'cost': {'input': 0.005, 'output': 0.015},
+        'supports_vision': True
+    },
+    'o1': {
+        'api_name': 'o1',
+        'cost': {'input': 0.02, 'output': 0.06},
+        'supports_vision': False
+    },
+    'o1-mini': {
+        'api_name': 'o1-mini',
+        'cost': {'input': 0.01, 'output': 0.03},
+        'supports_vision': False
+    }
+}
 # Enhanced Request/Response Models
 class LoginData(BaseModel):
     username: str
@@ -159,6 +195,74 @@ if not os.path.exists(CHATS_FILE):
     with open(CHATS_FILE, 'w') as f:
         json.dump({"chats": []}, f)
 
+
+
+
+async def stream_o1(messages: List[dict], model: str):
+    """Stream responses from O1 reasoning models using OpenAI API"""
+    try:
+        async with httpx.AsyncClient() as client:
+            # Convert messages to OpenAI format
+            formatted_messages = []
+            for msg in messages:
+                if isinstance(msg["content"], list):
+                    # Handle multimodal content
+                    content = []
+                    for item in msg["content"]:
+                        if item["type"] == "text":
+                            content.append(item["text"])
+                        elif item["type"] == "image":
+                            content.append({
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{item['source']['data']}"
+                                }
+                            })
+                    formatted_messages.append({
+                        "role": msg["role"],
+                        "content": content[0] if len(content) == 1 else content
+                    })
+                else:
+                    formatted_messages.append({
+                        "role": msg["role"],
+                        "content": msg["content"]
+                    })
+
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {os.getenv('opene')}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "gpt-4-turbo-preview",  # Base model for O1
+                    "messages": [
+                        {"role": "system", "content": "You are an advanced reasoning assistant focused on step-by-step logical analysis and problem-solving. Take your time to think through problems carefully."}, 
+                        *formatted_messages
+                    ],
+                    "stream": True,
+                    "temperature": 0.1,  # Lower temperature for reasoning
+                    "max_tokens": 4096
+                },
+                timeout=None
+            )
+
+            if response.status_code != 200:
+                logger.error(f"O1 API error: {response.status_code}")
+                raise HTTPException(status_code=response.status_code)
+
+            async for line in response.aiter_lines():
+                if line.startswith("data: "):
+                    try:
+                        data = json.loads(line[6:])
+                        if "content" in data:
+                            yield {"content": data["content"]}
+                    except json.JSONDecodeError:
+                        continue
+
+    except Exception as e:
+        logger.error(f"Error in stream_o1: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 # New route to serve the AI chat interface
 @app.get("/ai")
 async def serve_chat_ui():
@@ -260,6 +364,7 @@ async def delete_chat(
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+
 @app.post("/api/upload")
 async def upload_file(
     files: List[UploadFile],
@@ -273,33 +378,55 @@ async def upload_file(
         
         uploaded_files = []
         for file in files:
-            file_ext = os.path.splitext(file.filename)[1]
-            safe_filename = f"{uuid.uuid4()}{file_ext}"
-            file_path = os.path.join(UPLOADS_DIR, safe_filename)
+            # Increased max size to 20MB
+            if len(await file.read()) > 20 * 1024 * 1024:  
+                raise HTTPException(status_code=400, detail=f"File {file.filename} exceeds 20MB limit")
+            await file.seek(0)
             
-            # Save file
             content = await file.read()
-            with open(file_path, "wb") as f:
-                f.write(content)
+            file_ext = os.path.splitext(file.filename)[1].lower()
             
-            # For images, generate base64
-            if file.content_type.startswith('image/'):
-                base64_data = base64.b64encode(content).decode('utf-8')
-                uploaded_files.append({
-                    "path": f"/uploads/{safe_filename}",
-                    "type": "image",
-                    "base64": f"data:{file.content_type};base64,{base64_data}"
-                })
+            # Expanded supported formats
+            if file.content_type.startswith('image/') or file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']:
+                # Process image
+                try:
+                    img = Image.open(io.BytesIO(content))
+                    # Resize if needed while maintaining aspect ratio
+                    if max(img.size) > 1568:
+                        ratio = 1568 / max(img.size)
+                        new_size = tuple(int(dim * ratio) for dim in img.size)
+                        img = img.resize(new_size, Image.Resampling.LANCZOS)
+                    
+                    # Convert to RGB if needed
+                    if img.mode in ('RGBA', 'P'):
+                        img = img.convert('RGB')
+                    
+                    # Save as JPEG
+                    img_byte_arr = io.BytesIO()
+                    img.save(img_byte_arr, format='JPEG', quality=85)
+                    img_byte_arr = img_byte_arr.getvalue()
+                    
+                    base64_image = base64.b64encode(img_byte_arr).decode('utf-8')
+                    uploaded_files.append({
+                        "type": "image",
+                        "name": file.filename,
+                        "base64": f"data:image/jpeg;base64,{base64_image}"
+                    })
+                except Exception as e:
+                    logger.error(f"Image processing error: {str(e)}")
+                    raise HTTPException(status_code=400, detail="Invalid image file")
             else:
+                # Handle other file types
                 uploaded_files.append({
-                    "path": f"/uploads/{safe_filename}",
                     "type": "file",
-                    "name": file.filename
+                    "name": file.filename,
+                    "content": base64.b64encode(content).decode('utf-8')
                 })
-        
+
         return uploaded_files
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception as e:
+        logger.error(f"Upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 async def stream_gpt(messages: List[dict], model: str):
     async with httpx.AsyncClient() as client:
@@ -421,24 +548,30 @@ async def stream_chat(request: dict, auth: HTTPAuthorizationCredentials = Depend
         if not user:
             raise HTTPException(status_code=401, detail="Invalid user")
 
-        # Calculate costs including files
+        model = request.get('model')
+        if model not in MODELS:
+            raise HTTPException(status_code=400, detail="Invalid model")
+
+        # Calculate initial cost based on input
         message_chars = len(request["message"])
         file_chars = await process_file_costs(request.get("files", []))
-        total_chars = message_chars + file_chars
-        cost = calculate_cost(request["model"], total_chars) * 5  # 5x multiplier for Vision
+        total_input_chars = message_chars + file_chars
+        
+        # Estimate initial cost (will be updated with actual output length)
+        estimated_cost = calculate_cost(model, total_input_chars)
 
-        if not user.get("is_free_tier") and user["credits"] < cost:
+        if not user.get("is_free_tier") and user["credits"] < estimated_cost:
             raise HTTPException(status_code=402, detail="Insufficient credits")
 
-        # Format messages for Claude's API
-        formatted_messages = []
+        # Format messages for model API
+        messages = []
         for msg in request.get("history", []):
-            formatted_content = []
+            content = []
             if isinstance(msg.get("content"), dict):
                 if "files" in msg["content"]:
                     for file in msg["content"]["files"]:
-                        if file["type"] == "image":
-                            formatted_content.append({
+                        if file["type"] == "image" and MODELS[model]['supports_vision']:
+                            content.append({
                                 "type": "image",
                                 "source": {
                                     "type": "base64",
@@ -446,20 +579,20 @@ async def stream_chat(request: dict, auth: HTTPAuthorizationCredentials = Depend
                                     "data": file["base64"].split(",")[1]
                                 }
                             })
-                formatted_content.append({"type": "text", "text": msg["content"].get("text", "")})
+                content.append({"type": "text", "text": msg["content"].get("text", "")})
             else:
-                formatted_content.append({"type": "text", "text": msg["content"]})
+                content.append({"type": "text", "text": msg["content"]})
             
-            formatted_messages.append({
+            messages.append({
                 "role": msg["role"],
-                "content": formatted_content
+                "content": content
             })
 
         # Add current message with files
         current_content = []
         if request.get("files"):
-            for file in request["files"]:
-                if file["type"] == "image":
+            for file in request.get("files", []):
+                if file["type"] == "image" and MODELS[model]['supports_vision']:
                     current_content.append({
                         "type": "image",
                         "source": {
@@ -469,27 +602,42 @@ async def stream_chat(request: dict, auth: HTTPAuthorizationCredentials = Depend
                         }
                     })
         current_content.append({"type": "text", "text": request["message"]})
-        formatted_messages.append({
+        messages.append({
             "role": "user",
             "content": current_content
         })
 
-        # Update user credits
-        if not user.get("is_free_tier"):
-            user["credits"] -= cost
-            update_user(user)
-
-        # Stream based on model
-        stream = stream_claude(formatted_messages, request["model"])
+        # Stream based on model type
+        if model.startswith('claude'):
+            stream = stream_claude(messages, MODELS[model]['api_name'])
+        elif model.startswith('gpt'):
+            stream = stream_gpt(messages, MODELS[model]['api_name'])
+        else:  # o1 models
+            stream = stream_o1(messages, MODELS[model]['api_name'])
         
-        # Log usage
-        log_usage(user["id"], request["model"], cost, total_chars, "chat")
-
-        # Return StreamingResponse with cost metadata
+        output_chars = 0
+        
         async def enhanced_stream():
-            yield f"data: {json.dumps({'type': 'cost', 'cost': cost})}\n\n"
-            async for item in stream:
-                yield item
+            nonlocal output_chars
+            yield f"data: {json.dumps({'type': 'cost', 'cost': estimated_cost})}\n\n"
+            
+            async for chunk in stream:
+                if 'content' in chunk:
+                    output_chars += len(chunk['content'])
+                    # Update cost based on actual output length
+                    final_cost = calculate_cost(model, total_input_chars, output_chars)
+                    # Only yield new cost if it's significantly different
+                    if abs(final_cost - estimated_cost) > 0.0001:
+                        estimated_cost = final_cost
+                        yield f"data: {json.dumps({'type': 'cost', 'cost': final_cost})}\n\n"
+                yield f"data: {json.dumps(chunk)}\n\n"
+
+        # Update user credits with final cost after streaming
+        if not user.get("is_free_tier"):
+            final_cost = calculate_cost(model, total_input_chars, output_chars)
+            user["credits"] -= final_cost
+            update_user(user)
+            log_usage(user["id"], model, final_cost, total_input_chars + output_chars, "chat")
 
         return StreamingResponse(
             enhanced_stream(),
@@ -691,10 +839,16 @@ def update_user(user: Dict):
     with open(USERS_FILE, 'w') as f:
         json.dump(data, f)
 
-def calculate_cost(model: str, chars: int, include_context: bool = False) -> float:
-    base_cost = COSTS[model]
-    multiplier = 1.5 if include_context else 1.0
-    return ((chars / 1000) * base_cost["input"] + (chars * multiplier / 1000) * base_cost["output"]) * 40
+def calculate_cost(model: str, input_chars: int, output_chars: int = 0) -> float:
+    """Calculate cost based on input and output characters for a given model"""
+    if model not in MODELS:
+        raise ValueError(f"Unknown model: {model}")
+    
+    model_costs = MODELS[model]['cost']
+    input_tokens = input_chars / 4  # Approximate tokens
+    output_tokens = output_chars / 4
+    
+    return (input_tokens * model_costs['input'] + output_tokens * model_costs['output']) / 1000
 
 def log_usage(user_id: str, model: str, cost: float, chars: int, feature: str = "solve"):
     with open(USAGE_FILE, 'r+') as f:
