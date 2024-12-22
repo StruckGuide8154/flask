@@ -208,7 +208,7 @@
         .message-group {
             display: flex;
             gap: 1rem;
-            padding: 1rem;
+            padding: 0.5rem;
             animation: slideIn 0.3s ease;
         }
 
@@ -256,6 +256,12 @@
             border-bottom-left-radius: 0.25rem;
         }
 
+        .message img {
+            max-width: 100%;
+            border-radius: 0.5rem;
+            margin: 0.5rem 0;
+        }
+
         .message pre {
             background: rgba(0, 0, 0, 0.3) !important;
             border-radius: 0.75rem;
@@ -296,6 +302,7 @@
             resize: none;
             min-height: 24px;
             padding: 0.25rem;
+            line-height: 1.5;
         }
 
         .action-btn {
@@ -344,10 +351,6 @@
             transition: transform 0.2s ease;
         }
 
-        .preview-item:hover img {
-            transform: scale(1.05);
-        }
-
         .remove-file {
             position: absolute;
             top: 0.25rem;
@@ -370,28 +373,6 @@
         .remove-file:hover {
             background: rgba(255, 0, 0, 0.3);
             border-color: rgba(255, 0, 0, 0.5);
-        }
-
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        ::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: var(--border);
-            border-radius: 3px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--gold);
         }
 
         .empty-state {
@@ -422,6 +403,28 @@
             font-size: 0.875rem;
             max-width: 400px;
         }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--gold);
+        }
     </style>
 </head>
 <body>
@@ -430,14 +433,14 @@
             <div class="logo">AI Chat</div>
             <input type="text" class="input" id="username" placeholder="Username">
             <input type="password" class="input" id="password" placeholder="Password">
-            <button class="btn" onclick="login()">Sign In</button>
+            <button class="btn" id="loginBtn">Sign In</button>
         </div>
     </div>
 
     <div class="app" id="app" style="display: none;">
         <aside class="sidebar">
             <div class="logo">AI Chat</div>
-            <button class="btn" onclick="startNewChat()">New Chat</button>
+            <button class="btn" id="newChatBtn">New Chat</button>
             <div class="chat-list" id="chatList"></div>
         </aside>
 
@@ -451,6 +454,16 @@
                 </select>
             </div>
 
+            <div class="messages" id="messages">
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <h3>Start a New Conversation</h3>
+                    <p>Type a message below to begin chatting</p>
+                </div>
+            </div>
+
             <div class="input-area">
                 <div class="input-wrap">
                     <textarea 
@@ -458,17 +471,16 @@
                         id="messageInput" 
                         placeholder="Message (Markdown & Code supported)" 
                         rows="1"
-                        onInput="autoResize(this)"
                     ></textarea>
                     
-                    <button class="action-btn upload-btn" onclick="document.getElementById('fileInput').click()">
+                    <button class="action-btn upload-btn" id="uploadBtn">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242M12 12v9m4-4-4-4-4 4"/>
                         </svg>
                     </button>
                     <input type="file" id="fileInput" hidden multiple accept="image/*,.pdf,.txt">
                     
-                    <button class="action-btn send-btn" onclick="sendMessage()">
+                    <button class="action-btn send-btn" id="sendBtn">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/>
                         </svg>
@@ -480,23 +492,71 @@
     </div>
 
     <script>
+        // Global state
         let token = null;
         let currentChatId = null;
         let messageHistory = [];
         let uploadedFiles = [];
 
-        // Configure markdown and syntax highlighting
+        // Configure markdown
         marked.setOptions({
             highlight: (code, lang) => hljs.highlightAuto(code).value,
             breaks: true
         });
 
-        // Auth & Initialization
-        async function login() {
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
+        // Initialize event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            // Login form
+            document.getElementById('loginBtn').addEventListener('click', login);
+            document.getElementById('password').addEventListener('keydown', e => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    login();
+                }
+            });
 
+            // Chat interface
+            document.getElementById('newChatBtn').addEventListener('click', startNewChat);
+            document.getElementById('uploadBtn').addEventListener('click', () => {
+                document.getElementById('fileInput').click();
+            });
+            document.getElementById('sendBtn').addEventListener('click', sendMessage);
+
+            // File handling
+            document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+
+            // Message input
+            const messageInput = document.getElementById('messageInput');
+            messageInput.addEventListener('input', () => {
+                messageInput.style.height = 'auto';
+                messageInput.style.height = Math.min(messageInput.scrollHeight, 200) + 'px';
+            });
+            messageInput.addEventListener('keydown', e => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+
+            // Check for saved token
+            const savedToken = localStorage.getItem('token');
+            if (savedToken) {
+                token = savedToken;
+                verifyAndInitialize();
+            }
+        });
+
+        // Auth functions
+        async function login() {
             try {
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+
+                if (!username || !password) {
+                    alert('Please enter both username and password');
+                    return;
+                }
+
                 const response = await fetch('/api/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -511,50 +571,47 @@
                     document.getElementById('app').style.display = 'grid';
                     await initializeApp();
                 } else {
-                    alert('Login failed. Please check your credentials.');
+                    throw new Error('Login failed');
                 }
             } catch (error) {
-                console.error('Login failed:', error);
-                alert('Login failed. Please try again.');
+                console.error('Login error:', error);
+                alert('Login failed. Please check your credentials and try again.');
             }
         }
 
+        async function verifyAndInitialize() {
+            try {
+                const response = await fetch('/api/verify', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    document.getElementById('loginScreen').style.display = 'none';
+                    document.getElementById('app').style.display = 'grid';
+                    await initializeApp();
+                } else {
+                    localStorage.removeItem('token');
+                }
+            } catch (error) {
+                console.error('Verification error:', error);
+                localStorage.removeItem('token');
+            }
+        }
+
+        // App initialization
         async function initializeApp() {
-            setupEventListeners();
-            await loadChats();
-            if (currentChatId) {
-                await loadChat(currentChatId);
+            try {
+                await loadChats();
+                if (currentChatId) {
+                    await loadChat(currentChatId);
+                }
+            } catch (error) {
+                console.error('Initialization error:', error);
+                alert('Failed to initialize the application. Please try refreshing the page.');
             }
         }
 
-        function setupEventListeners() {
-            const messageInput = document.getElementById('messageInput');
-            const fileInput = document.getElementById('fileInput');
-
-            messageInput.addEventListener('keydown', e => {
-                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                    e.preventDefault();
-                    sendMessage();
-                }
-            });
-
-            fileInput.addEventListener('change', handleFileUpload);
-
-            // Add keydown event for login form
-            document.getElementById('password').addEventListener('keydown', e => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    login();
-                }
-            });
-        }
-
-        function autoResize(textarea) {
-            textarea.style.height = 'auto';
-            textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
-        }
-
-        // Chat Management
+        // Chat management functions
         async function loadChats() {
             try {
                 const response = await fetch('/api/chats', {
@@ -582,11 +639,12 @@
                         `;
                         
                         item.dataset.chatId = chat.id;
-                        item.onclick = () => loadChat(chat.id);
+                        item.addEventListener('click', () => loadChat(chat.id));
                         chatList.appendChild(item);
                     });
             } catch (error) {
                 console.error('Failed to load chats:', error);
+                alert('Failed to load chats. Please try refreshing the page.');
             }
         }
 
@@ -630,7 +688,6 @@
 
         async function loadChat(chatId) {
             try {
-                // First, find the chat in the existing chats list
                 const response = await fetch('/api/chats', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -641,10 +698,13 @@
                 const chat = chats.find(c => c.id === chatId);
                 
                 if (!chat) throw new Error('Chat not found');
+                
                 currentChatId = chatId;
                 messageHistory = chat.messages || [];
                 
                 const messagesContainer = document.getElementById('messages');
+                if (!messagesContainer) return;
+                
                 messagesContainer.innerHTML = '';
                 
                 if (messageHistory.length) {
@@ -676,7 +736,94 @@
             }
         }
 
-        // File Handling
+        // Message handling functions
+        function appendMessage(content, isUser) {
+            const messages = document.getElementById('messages');
+            if (!messages) return;
+            
+            // Remove empty state if present
+            const emptyState = messages.querySelector('.empty-state');
+            if (emptyState) {
+                messages.removeChild(emptyState);
+            }
+            
+            const messageGroup = document.createElement('div');
+            messageGroup.className = 'message-group';
+            
+            const avatar = document.createElement('div');
+            avatar.className = `message-avatar ${isUser ? 'user' : 'ai'}`;
+            avatar.innerHTML = isUser ? 
+                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>' : 
+                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8V4m0 4 3 3m-3-3-3 3m3 3v4m0 0-3-3m3 3 3-3"/></svg>';
+            
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-content';
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user' : 'ai'}`;
+
+            if (isUser) {
+                let messageContent = content;
+                if (uploadedFiles.length) {
+                    const filesHtml = uploadedFiles.map(file => {
+                        if (file.type === 'image') {
+                            return `<img src="${file.base64}" alt="Upload" style="max-width: 200px; border-radius: 0.5rem; margin: 0.5rem 0;">`;
+                        }
+                        return `<div>[File: ${file.name}]</div>`;
+                    }).join('');
+                    messageContent = `${filesHtml}${content ? `<div>${content}</div>` : ''}`;
+                }
+                messageDiv.innerHTML = messageContent;
+            } else {
+                try {
+                    messageDiv.innerHTML = marked.parse(content);
+                    messageDiv.querySelectorAll('pre code').forEach(block => {
+                        hljs.highlightBlock(block);
+                    });
+                } catch (error) {
+                    console.error('Markdown parsing error:', error);
+                    messageDiv.textContent = content;
+                }
+            }
+
+            messageContent.appendChild(messageDiv);
+            
+            if (isUser) {
+                messageGroup.appendChild(messageContent);
+                messageGroup.appendChild(avatar);
+            } else {
+                messageGroup.appendChild(avatar);
+                messageGroup.appendChild(messageContent);
+            }
+            
+            messages.appendChild(messageGroup);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        function updateLastMessage(content) {
+            const messages = document.getElementById('messages');
+            if (!messages) return;
+            
+            const lastMessage = messages.lastElementChild;
+            
+            if (lastMessage?.querySelector('.message.ai')) {
+                const messageDiv = lastMessage.querySelector('.message.ai');
+                try {
+                    messageDiv.innerHTML = marked.parse(content);
+                    messageDiv.querySelectorAll('pre code').forEach(block => {
+                        hljs.highlightBlock(block);
+                    });
+                } catch (error) {
+                    console.error('Markdown parsing error:', error);
+                    messageDiv.textContent = content;
+                }
+                messages.scrollTop = messages.scrollHeight;
+            } else {
+                appendMessage(content, false);
+            }
+        }
+
+        // File handling functions
         async function handleFileUpload(event) {
             const files = event.target.files;
             if (!files.length) return;
@@ -719,6 +866,7 @@
 
         function updateFilePreview() {
             const preview = document.getElementById('filePreview');
+            if (!preview) return;
             preview.innerHTML = '';
 
             uploadedFiles.forEach((file, index) => {
@@ -751,7 +899,6 @@
             updateFilePreview();
         }
 
-        // Message Handling
         async function sendMessage() {
             const input = document.getElementById('messageInput');
             if (!input) return;
@@ -765,7 +912,6 @@
                     if (!newChat) return;
                 }
 
-            try {
                 appendMessage(message, true);
                 input.value = '';
                 input.style.height = 'auto';
@@ -817,13 +963,14 @@
                 );
 
                 // Update chat in the backend
-                await fetch(`/api/chats/${currentChatId}`, {
+                await fetch('/api/chat', {
                     method: 'PUT',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
+                        chatId: currentChatId,
                         messages: messageHistory
                     })
                 });
@@ -837,118 +984,14 @@
             }
         }
 
-        function appendMessage(content, isUser) {
-            const messages = document.getElementById('messages');
-            if (!messages) return;
-            
-            // Remove empty state if present
-            const emptyState = messages.querySelector('.empty-state');
-            if (emptyState) {
-                messages.removeChild(emptyState);
+        // Keyboard shortcuts
+        document.addEventListener('keydown', e => {
+            if (e.key === 'l' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                localStorage.removeItem('token');
+                window.location.reload();
             }
-            
-            const messageGroup = document.createElement('div');
-            messageGroup.className = 'message-group';
-            
-            const avatar = document.createElement('div');
-            avatar.className = `message-avatar ${isUser ? 'user' : 'ai'}`;
-            avatar.innerHTML = isUser ? 
-                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>' : 
-                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8V4m0 4 3 3m-3-3-3 3m3 3v4m0 0-3-3m3 3 3-3"/></svg>';
-            
-            const messageContent = document.createElement('div');
-            messageContent.className = 'message-content';
-            
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${isUser ? 'user' : 'ai'}`;
-
-            if (isUser) {
-                let messageContent = content;
-                if (uploadedFiles.length) {
-                    const filesHtml = uploadedFiles.map(file => {
-                        if (file.type === 'image') {
-                            return `<img src="${file.base64}" alt="Upload" style="max-width: 200px; border-radius: 0.5rem; margin: 0.5rem 0;">`;
-                        }
-                        return `<div>[File: ${file.name}]</div>`;
-                    }).join('');
-                    messageContent = `${filesHtml}${content ? `<div>${content}</div>` : ''}`;
-                }
-                messageDiv.innerHTML = messageContent;
-            } else {
-                messageDiv.innerHTML = marked.parse(content);
-                messageDiv.querySelectorAll('pre code').forEach(block => {
-                    hljs.highlightBlock(block);
-                });
-            }
-
-            messageContent.appendChild(messageDiv);
-            if (isUser) {
-                messageGroup.appendChild(messageContent);
-                messageGroup.appendChild(avatar);
-            } else {
-                messageGroup.appendChild(avatar);
-                messageGroup.appendChild(messageContent);
-            }
-            messages.appendChild(messageGroup);
-            messages.scrollTop = messages.scrollHeight;
-        }
-
-        function updateLastMessage(content) {
-            const messages = document.getElementById('messages');
-            const lastMessage = messages.lastElementChild;
-            
-            if (lastMessage?.classList.contains('ai')) {
-                lastMessage.innerHTML = marked.parse(content);
-                lastMessage.querySelectorAll('pre code').forEach(block => {
-                    hljs.highlightBlock(block);
-                });
-                messages.scrollTop = messages.scrollHeight;
-            } else {
-                appendMessage(content, false);
-            }
-        }
-
-        // Handle saved token and initialization
-        window.onload = () => {
-            const savedToken = localStorage.getItem('token');
-            if (savedToken) {
-                token = savedToken;
-                
-                // Verify token before showing the app
-                fetch('/api/verify', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                }).then(response => {
-                    if (response.ok) {
-                        document.getElementById('loginScreen').style.display = 'none';
-                        document.getElementById('app').style.display = 'grid';
-                        initializeApp();
-                    } else {
-                        // Token is invalid, remove it
-                        localStorage.removeItem('token');
-                    }
-                }).catch(error => {
-                    console.error('Token verification failed:', error);
-                    localStorage.removeItem('token');
-                });
-            }
-
-            // Add logout functionality
-            window.addEventListener('keydown', e => {
-                if (e.key === 'l' && (e.metaKey || e.ctrlKey)) {
-                    e.preventDefault();
-                    localStorage.removeItem('token');
-                    window.location.reload();
-                }
-            });
-        };
+        });
     </script>
 </body>
-</html><div class="messages" id="messages">
-                <div class="empty-state">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                    </svg>
-                    <h3>No messages yet</h3>
-                    <p>Start a new conversation or select an existing chat from the sidebar</p>
-                </div>
-            </div>
+</html>
