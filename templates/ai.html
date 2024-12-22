@@ -525,6 +525,7 @@ let messageHistory = [];
 let uploadedFiles = [];
 let user = null;
 
+
 // Configure markdown
 marked.setOptions({
     highlight: (code, lang) => hljs.highlightAuto(code).value,
@@ -573,11 +574,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Credits management
+// Credits display function
 function updateCreditsDisplay(credits) {
     const display = document.getElementById('creditsAmount');
     if (display) {
-        display.textContent = credits.toFixed(2);
+        display.textContent = (credits || 0).toFixed(2);
     }
 }
 
@@ -623,24 +624,37 @@ async function verifyAndInitialize() {
         });
 
         if (response.ok) {
-            const data = await response.json();
-            user = data.user;
             document.getElementById('loginScreen').style.display = 'none';
             document.getElementById('app').style.display = 'grid';
-            updateCreditsDisplay(user.credits);
             await initializeApp();
         } else {
             localStorage.removeItem('token');
+            throw new Error('Invalid token');
         }
     } catch (error) {
         console.error('Verification error:', error);
         localStorage.removeItem('token');
+        window.location.reload();
     }
 }
 
+
+
 // App initialization
+// Update initialization to handle credits properly
 async function initializeApp() {
     try {
+        // First get user info if we don't have it
+        if (!user && token) {
+            const userResponse = await fetch('/api/users/me', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (userResponse.ok) {
+                user = await userResponse.json();
+                updateCreditsDisplay(user.credits);
+            }
+        }
+
         await loadChats();
         if (currentChatId) {
             await loadChat(currentChatId);
@@ -967,7 +981,13 @@ function updateLastMessage(content, cost = null) {
         appendMessage(content, false, cost);
     }
 }
-
+        
+async function handleMessageCost(cost) {
+    if (user) {
+        user.credits -= cost;
+        updateCreditsDisplay(user.credits);
+    }
+    
 async function sendMessage() {
     const input = document.getElementById('messageInput');
     if (!input) return;
@@ -1022,18 +1042,15 @@ async function sendMessage() {
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
                     try {
-                        const data = JSON.parse(line.slice(5));
-                        if (data.type === 'cost') {
-                            messageCost = data.cost;
-                            // Update user's total credits
-                            if (user?.credits) {
-                                user.credits -= data.cost;
-                                updateCreditsDisplay(user.credits);
-                            }
-                        } else if (data.content) {
-                            currentResponse += data.content;
-                            updateLastMessage(currentResponse, messageCost);
-                        }
+const data = JSON.parse(line.slice(5));
+if (data.type === 'cost') {
+    messageCost = data.cost;
+    await handleMessageCost(data.cost);
+} else if (data.content) {
+    currentResponse += data.content;
+    updateLastMessage(currentResponse, messageCost);
+}
+
                     } catch (e) {
                         console.error('Error parsing stream:', e);
                     }
