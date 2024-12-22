@@ -205,26 +205,55 @@
             gap: 1.25rem;
         }
 
+        .message-group {
+            display: flex;
+            gap: 1rem;
+            padding: 1rem;
+            animation: slideIn 0.3s ease;
+        }
+
+        .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--gold-gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .message-avatar.ai {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+        }
+
+        .message-content {
+            flex: 1;
+            max-width: 80%;
+        }
+
         .message {
-            max-width: 85%;
-            padding: 1rem 1.25rem;
+            padding: 0.75rem 1rem;
             border-radius: 1rem;
             line-height: 1.6;
             font-size: 0.9375rem;
-            animation: slideIn 0.3s ease;
             box-shadow: var(--shadow);
+            display: inline-block;
+            max-width: 100%;
         }
 
         .message.user {
-            margin-left: auto;
             background: var(--gold-gradient);
             color: var(--black);
+            margin-left: auto;
+            border-bottom-right-radius: 0.25rem;
         }
 
         .message.ai {
-            margin-right: auto;
             background: var(--bg-surface);
             border: 1px solid var(--border);
+            border-bottom-left-radius: 0.25rem;
         }
 
         .message pre {
@@ -594,13 +623,17 @@
 
         async function loadChat(chatId) {
             try {
-                const response = await fetch(`/api/chats/${chatId}`, {
+                // First, find the chat in the existing chats list
+                const response = await fetch('/api/chats', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
-                if (!response.ok) throw new Error('Failed to load chat');
+                if (!response.ok) throw new Error('Failed to load chats');
                 
-                const chat = await response.json();
+                const chats = await response.json();
+                const chat = chats.find(c => c.id === chatId);
+                
+                if (!chat) throw new Error('Chat not found');
                 currentChatId = chatId;
                 messageHistory = chat.messages || [];
                 
@@ -802,6 +835,18 @@
                 messages.removeChild(emptyState);
             }
             
+            const messageGroup = document.createElement('div');
+            messageGroup.className = 'message-group';
+            
+            const avatar = document.createElement('div');
+            avatar.className = `message-avatar ${isUser ? 'user' : 'ai'}`;
+            avatar.innerHTML = isUser ? 
+                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>' : 
+                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8V4m0 4 3 3m-3-3-3 3m3 3v4m0 0-3-3m3 3 3-3"/></svg>';
+            
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-content';
+            
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isUser ? 'user' : 'ai'}`;
 
@@ -824,7 +869,9 @@
                 });
             }
 
-            messages.appendChild(messageDiv);
+            messageContent.appendChild(messageDiv);
+            messageGroup.appendChild(isUser ? [messageContent, avatar] : [avatar, messageContent]);
+            messages.appendChild(messageGroup);
             messages.scrollTop = messages.scrollHeight;
         }
 
@@ -878,12 +925,4 @@
         };
     </script>
 </body>
-</html><div class="messages" id="messages">
-                <div class="empty-state">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                    </svg>
-                    <h3>No messages yet</h3>
-                    <p>Start a new conversation or select an existing chat from the sidebar</p>
-                </div>
-            </div>
+</html>
