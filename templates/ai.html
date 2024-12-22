@@ -425,6 +425,28 @@
         ::-webkit-scrollbar-thumb:hover {
             background: var(--gold);
         }
+        .credits-display {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    padding: 0.5rem 1rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    color: var(--gold);
+    backdrop-filter: blur(10px);
+    box-shadow: var(--shadow);
+    z-index: 100;
+}
+
+.message-cost {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-top: 0.25rem;
+    opacity: 0.8;
+}
+
     </style>
 </head>
 <body>
@@ -453,6 +475,10 @@
                     <option value="gpt4-vision">GPT-4 Vision</option>
                 </select>
             </div>
+<div class="credits-display">
+    Credits: <span id="creditsAmount">0.00</span>
+</div>
+
 
             <div class="messages" id="messages">
                 <div class="empty-state">
@@ -737,9 +763,12 @@
         }
 
         // Message handling functions
-        function appendMessage(content, isUser) {
-            const messages = document.getElementById('messages');
-            if (!messages) return;
+function appendMessage(content, isUser, cost = null) {
+    const messages = document.getElementById('messages');
+    if (!messages) return;
+    
+    const messageGroup = document.createElement('div');
+    messageGroup.className = 'message-group';
             
             // Remove empty state if present
             const emptyState = messages.querySelector('.empty-state');
@@ -774,7 +803,22 @@
                     messageContent = `${filesHtml}${content ? `<div>${content}</div>` : ''}`;
                 }
                 messageDiv.innerHTML = messageContent;
-            } else {
+                
+            } 
+                if (!isUser && cost) {
+        const costDisplay = document.createElement('div');
+        costDisplay.className = 'message-cost';
+        costDisplay.textContent = `Credits used: ${cost.toFixed(4)}`;
+        messageContent.appendChild(costDisplay);
+    }
+    
+    messageGroup.appendChild(avatar);
+    messageGroup.appendChild(messageContent);
+    messages.appendChild(messageGroup);
+    messages.scrollTop = messages.scrollHeight;
+}
+
+else {
                 try {
                     messageDiv.innerHTML = marked.parse(content);
                     messageDiv.querySelectorAll('pre code').forEach(block => {
@@ -992,6 +1036,15 @@
                 window.location.reload();
             }
         });
+        
+    </script>
+    <script>
+function updateCreditsDisplay(credits) {
+    const display = document.getElementById('creditsAmount');
+    if (display) {
+        display.textContent = credits.toFixed(2);
+    }
+}
     </script>
 </body>
 </html>
