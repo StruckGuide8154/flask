@@ -519,12 +519,12 @@
 
     <script>
 // Global state
+// Global state
 let token = null;
 let currentChatId = null;
 let messageHistory = [];
 let uploadedFiles = [];
 let user = null;
-
 
 // Configure markdown
 marked.setOptions({
@@ -534,9 +534,14 @@ marked.setOptions({
 
 // Initialize event listeners
 document.addEventListener('DOMContentLoaded', () => {
-    // Login form
-    document.getElementById('loginBtn').addEventListener('click', login);
-    document.getElementById('password').addEventListener('keydown', e => {
+    setupEventListeners();
+    checkSavedToken();
+});
+
+function setupEventListeners() {
+    // Login handling
+    document.getElementById('loginBtn')?.addEventListener('click', login);
+    document.getElementById('password')?.addEventListener('keydown', e => {
         if (e.key === 'Enter') {
             e.preventDefault();
             login();
@@ -544,41 +549,44 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Chat interface
-    document.getElementById('newChatBtn').addEventListener('click', startNewChat);
-    document.getElementById('uploadBtn').addEventListener('click', () => {
+    document.getElementById('newChatBtn')?.addEventListener('click', startNewChat);
+    document.getElementById('uploadBtn')?.addEventListener('click', () => {
         document.getElementById('fileInput').click();
     });
-    document.getElementById('sendBtn').addEventListener('click', sendMessage);
+    document.getElementById('sendBtn')?.addEventListener('click', sendMessage);
 
     // File handling
-    document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+    document.getElementById('fileInput')?.addEventListener('change', handleFileUpload);
 
     // Message input
     const messageInput = document.getElementById('messageInput');
-    messageInput.addEventListener('input', () => {
-        messageInput.style.height = 'auto';
-        messageInput.style.height = Math.min(messageInput.scrollHeight, 200) + 'px';
-    });
-    messageInput.addEventListener('keydown', e => {
-        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    if (messageInput) {
+        messageInput.addEventListener('input', () => {
+            messageInput.style.height = 'auto';
+            messageInput.style.height = Math.min(messageInput.scrollHeight, 200) + 'px';
+        });
+        messageInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    }
+
+    // Logout shortcut
+    document.addEventListener('keydown', e => {
+        if (e.key === 'l' && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
-            sendMessage();
+            logout();
         }
     });
+}
 
-    // Check for saved token
+function checkSavedToken() {
     const savedToken = localStorage.getItem('token');
     if (savedToken) {
         token = savedToken;
         verifyAndInitialize();
-    }
-});
-
-// Credits display function
-function updateCreditsDisplay(credits) {
-    const display = document.getElementById('creditsAmount');
-    if (display) {
-        display.textContent = (credits || 0).toFixed(2);
     }
 }
 
@@ -604,8 +612,7 @@ async function login() {
             token = data.token;
             user = data.user;
             localStorage.setItem('token', token);
-            document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('app').style.display = 'grid';
+            showApp();
             updateCreditsDisplay(user.credits);
             await initializeApp();
         } else {
@@ -624,37 +631,37 @@ async function verifyAndInitialize() {
         });
 
         if (response.ok) {
-            document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('app').style.display = 'grid';
+            showApp();
             await initializeApp();
         } else {
-            localStorage.removeItem('token');
             throw new Error('Invalid token');
         }
     } catch (error) {
         console.error('Verification error:', error);
-        localStorage.removeItem('token');
-        window.location.reload();
+        logout();
     }
 }
 
+function showApp() {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'grid';
+}
 
+function logout() {
+    localStorage.removeItem('token');
+    window.location.reload();
+}
+
+function updateCreditsDisplay(credits) {
+    const display = document.getElementById('creditsAmount');
+    if (display) {
+        display.textContent = (credits || 0).toFixed(2);
+    }
+}
 
 // App initialization
-// Update initialization to handle credits properly
 async function initializeApp() {
     try {
-        // First get user info if we don't have it
-        if (!user && token) {
-            const userResponse = await fetch('/api/users/me', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (userResponse.ok) {
-                user = await userResponse.json();
-                updateCreditsDisplay(user.credits);
-            }
-        }
-
         await loadChats();
         if (currentChatId) {
             await loadChat(currentChatId);
@@ -665,7 +672,7 @@ async function initializeApp() {
     }
 }
 
-// Chat management functions
+// Chat management
 async function loadChats() {
     try {
         const response = await fetch('/api/chats', {
@@ -676,6 +683,8 @@ async function loadChats() {
         
         const chats = await response.json();
         const chatList = document.getElementById('chatList');
+        if (!chatList) return;
+        
         chatList.innerHTML = '';
         
         chats.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
@@ -696,10 +705,9 @@ async function loadChats() {
                 item.dataset.chatId = chat.id;
                 item.addEventListener('click', () => loadChat(chat.id));
                 chatList.appendChild(item);
-            });
+             });
     } catch (error) {
         console.error('Failed to load chats:', error);
-        alert('Failed to load chats. Please try refreshing the page.');
     }
 }
 
@@ -719,25 +727,28 @@ async function startNewChat() {
         currentChatId = chat.id;
         messageHistory = [];
         
-        const messagesContainer = document.getElementById('messages');
-        if (messagesContainer) {
-            messagesContainer.innerHTML = `
-                <div class="empty-state">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                    </svg>
-                    <h3>Start a New Conversation</h3>
-                    <p>Type a message below to begin chatting</p>
-                </div>
-            `;
-        }
-        
+        showEmptyState();
         await loadChats();
         return chat;
     } catch (error) {
         console.error('Failed to start new chat:', error);
         alert('Failed to create new chat. Please try again.');
         throw error;
+    }
+}
+
+function showEmptyState() {
+    const messagesContainer = document.getElementById('messages');
+    if (messagesContainer) {
+        messagesContainer.innerHTML = `
+            <div class="empty-state">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                <h3>Start a New Conversation</h3>
+                <p>Type a message below to begin chatting</p>
+            </div>
+        `;
     }
 }
 
@@ -771,30 +782,22 @@ async function loadChat(chatId) {
                 }
             });
         } else {
-            messagesContainer.innerHTML = `
-                <div class="empty-state">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                    </svg>
-                    <h3>Start a New Conversation</h3>
-                    <p>Type a message below to begin chatting</p>
-                </div>
-            `;
+            showEmptyState();
         }
         
-        document.querySelectorAll('.chat-item').forEach(item => {
-            item.classList.remove('active');
-            if (item.dataset.chatId === chatId) {
-                item.classList.add('active');
-            }
-        });
+        updateActiveChatSelection(chatId);
     } catch (error) {
         console.error('Failed to load chat:', error);
-        alert('Failed to load chat. Please try again.');
     }
 }
 
-// File handling functions
+function updateActiveChatSelection(chatId) {
+    document.querySelectorAll('.chat-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.chatId === chatId);
+    });
+}
+
+// File handling
 async function handleFileUpload(event) {
     const files = event.target.files;
     if (!files.length) return;
@@ -870,7 +873,7 @@ function removeFile(index) {
     updateFilePreview();
 }
 
-// Message handling functions
+// Message handling
 function appendMessage(content, isUser, cost = null, files = []) {
     const messages = document.getElementById('messages');
     if (!messages) return;
@@ -898,7 +901,6 @@ function appendMessage(content, isUser, cost = null, files = []) {
     if (isUser) {
         let finalContent = '';
         
-        // Add file previews if present
         if (files && files.length > 0) {
             const filesHtml = files.map(file => {
                 if (file.type === 'image') {
@@ -928,7 +930,6 @@ function appendMessage(content, isUser, cost = null, files = []) {
 
     messageContent.appendChild(messageDiv);
 
-    // Add cost display if present
     if (!isUser && cost) {
         const costDisplay = document.createElement('div');
         costDisplay.className = 'message-cost';
@@ -962,7 +963,6 @@ function updateLastMessage(content, cost = null) {
                 hljs.highlightBlock(block);
             });
 
-            // Update or add cost display
             if (cost) {
                 let costDisplay = lastMessage.querySelector('.message-cost');
                 if (!costDisplay) {
@@ -981,13 +981,7 @@ function updateLastMessage(content, cost = null) {
         appendMessage(content, false, cost);
     }
 }
-        
-async function handleMessageCost(cost) {
-    if (user) {
-        user.credits -= cost;
-        updateCreditsDisplay(user.credits);
-    }
-    
+
 async function sendMessage() {
     const input = document.getElementById('messageInput');
     if (!input) return;
@@ -1042,15 +1036,17 @@ async function sendMessage() {
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
                     try {
-const data = JSON.parse(line.slice(5));
-if (data.type === 'cost') {
-    messageCost = data.cost;
-    await handleMessageCost(data.cost);
-} else if (data.content) {
-    currentResponse += data.content;
-    updateLastMessage(currentResponse, messageCost);
-}
-
+                        const data = JSON.parse(line.slice(5));
+                        if (data.type === 'cost') {
+                            messageCost = data.cost;
+                            if (user?.credits !== undefined) {
+                                user.credits -= data.cost;
+                                updateCreditsDisplay(user.credits);
+                            }
+                        } else if (data.content) {
+                            currentResponse += data.content;
+                            updateLastMessage(currentResponse, messageCost);
+                        }
                     } catch (e) {
                         console.error('Error parsing stream:', e);
                     }
@@ -1064,7 +1060,7 @@ if (data.type === 'cost') {
             { role: 'assistant', content: currentResponse, cost: messageCost }
         );
 
-        // Update chat
+        // Update chat in backend
         try {
             await fetch(`/api/chats/${currentChatId}`, {
                 method: 'PUT',
@@ -1082,21 +1078,13 @@ if (data.type === 'cost') {
 
         uploadedFiles = [];
         updateFilePreview();
-        await loadChats(); // Refresh chat list to update preview
+        await loadChats(); // Refresh chat list
 
     } catch (error) {
         console.error('Failed to send message:', error);
         alert('Failed to send message. Please try again.');
     }
 }
-
-// Keyboard shortcuts
-document.addEventListener('keydown', e => {
-    if (e.key === 'l' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        localStorage.removeItem('token');
-        window.location.reload();
-    }
-});    </script>
+    </script>
 </body>
 </html>
