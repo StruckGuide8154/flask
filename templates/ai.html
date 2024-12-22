@@ -3,24 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Chat</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <title>AI Chat Interface</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tokyo-night-dark.min.css">
     <style>
         :root {
-            --black: #08080a;
-            --gold: #ffd70080;
-            --gold-bright: #ffd700;
-            --gold-glow: rgba(255, 215, 0, 0.08);
-            --gold-gradient: linear-gradient(135deg, rgba(255, 215, 0, 0.9), rgba(255, 179, 71, 0.9));
-            --text: #e2e8f0;
-            --text-dim: #94a3b8;
-            --bg-surface: rgba(8, 8, 10, 0.85);
-            --border: rgba(255, 215, 0, 0.08);
+            --black: #08080A;
+            --gold: #FFD700;
+            --gold-dim: rgba(255, 215, 0, 0.1);
+            --gold-glow: rgba(255, 215, 0, 0.05);
+            --text: #E2E8F0;
+            --text-dim: #94A3B8;
+            --surface: rgba(20, 20, 24, 0.8);
+            --surface-dark: rgba(12, 12, 14, 0.9);
+            --border: rgba(255, 215, 0, 0.1);
             --shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
         }
 
@@ -28,7 +24,7 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
         }
 
         body {
@@ -43,13 +39,13 @@
 
         .app {
             display: grid;
-            grid-template-columns: 240px 1fr;
+            grid-template-columns: 260px 1fr;
             height: 100vh;
             gap: 1px;
             background: var(--border);
         }
 
-        .login {
+        .login-modal {
             position: fixed;
             inset: 0;
             background: var(--black);
@@ -60,7 +56,7 @@
         }
 
         .login-form {
-            background: var(--bg-surface);
+            background: var(--surface);
             padding: 2.5rem;
             border-radius: 1.5rem;
             border: 1px solid var(--border);
@@ -68,7 +64,7 @@
             max-width: 400px;
             backdrop-filter: blur(20px);
             box-shadow: var(--shadow);
-            animation: slideIn 0.3s ease;
+            animation: slideUp 0.3s ease;
         }
 
         .logo {
@@ -76,17 +72,16 @@
             font-weight: 600;
             text-align: center;
             margin-bottom: 2rem;
-            background: var(--gold-gradient);
+            background: linear-gradient(135deg, var(--gold) 0%, #FFB347 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             text-shadow: 0 0 30px var(--gold-glow);
-            letter-spacing: -0.02em;
         }
 
         .input {
             width: 100%;
             padding: 0.875rem 1rem;
-            background: rgba(0, 0, 0, 0.2);
+            background: var(--surface-dark);
             border: 1px solid var(--border);
             border-radius: 0.75rem;
             color: var(--text);
@@ -98,7 +93,7 @@
         .input:focus {
             outline: none;
             border-color: var(--gold);
-            box-shadow: 0 0 0 1px var(--gold), 0 0 20px var(--gold-glow);
+            box-shadow: 0 0 0 1px var(--gold-glow);
         }
 
         .btn {
@@ -110,7 +105,7 @@
             font-size: 0.9375rem;
             cursor: pointer;
             transition: all 0.2s ease;
-            background: var(--gold-gradient);
+            background: linear-gradient(135deg, var(--gold) 0%, #FFB347 100%);
             color: var(--black);
         }
 
@@ -120,7 +115,7 @@
         }
 
         .sidebar {
-            background: var(--bg-surface);
+            background: var(--surface);
             padding: 1.25rem;
             display: flex;
             flex-direction: column;
@@ -141,7 +136,7 @@
         .chat-item {
             padding: 0.75rem 0.875rem;
             border-radius: 0.75rem;
-            background: rgba(0, 0, 0, 0.2);
+            background: var(--surface-dark);
             border: 1px solid var(--border);
             color: var(--text-dim);
             cursor: pointer;
@@ -150,9 +145,6 @@
             display: flex;
             align-items: center;
             gap: 0.75rem;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
 
         .chat-item:hover {
@@ -162,38 +154,69 @@
         }
 
         .chat-item.active {
-            background: var(--gold-gradient);
+            background: linear-gradient(135deg, var(--gold) 0%, #FFB347 100%);
             border: none;
             color: var(--black);
+        }
+
+        .user-info {
+            padding: 0.75rem;
+            background: var(--surface-dark);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--gold) 0%, #FFB347 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .main {
             display: flex;
             flex-direction: column;
             height: 100vh;
-            background: var(--bg-surface);
+            background: var(--surface);
             backdrop-filter: blur(20px);
         }
 
         .header {
-            padding: 0.875rem 1.25rem;
-            background: var(--bg-surface);
+            padding: 1rem 1.25rem;
+            background: var(--surface);
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
+            justify-content: space-between;
             gap: 1rem;
             backdrop-filter: blur(20px);
         }
 
         .model-select {
             padding: 0.5rem 0.875rem;
-            background: rgba(0, 0, 0, 0.2);
+            background: var(--surface-dark);
             border: 1px solid var(--border);
             border-radius: 0.75rem;
             color: var(--text);
             font-size: 0.875rem;
             outline: none;
-            min-width: 160px;
+            min-width: 180px;
+        }
+
+        .credits {
+            padding: 0.5rem 0.875rem;
+            background: var(--surface-dark);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            color: var(--gold);
+            font-size: 0.875rem;
         }
 
         .messages {
@@ -209,14 +232,14 @@
             display: flex;
             gap: 1rem;
             padding: 0.5rem;
-            animation: slideIn 0.3s ease;
+            animation: slideUp 0.3s ease;
         }
 
         .message-avatar {
             width: 32px;
             height: 32px;
             border-radius: 50%;
-            background: var(--gold-gradient);
+            background: linear-gradient(135deg, var(--gold) 0%, #FFB347 100%);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -224,7 +247,7 @@
         }
 
         .message-avatar.ai {
-            background: var(--bg-surface);
+            background: var(--surface-dark);
             border: 1px solid var(--border);
         }
 
@@ -234,26 +257,19 @@
         }
 
         .message {
-            padding: 0.75rem 1rem;
+            padding: 0.875rem 1rem;
             border-radius: 1rem;
-            line-height: 1.6;
             font-size: 0.9375rem;
             box-shadow: var(--shadow);
-            display: inline-block;
-            max-width: 100%;
+            background: var(--surface-dark);
+            border: 1px solid var(--border);
         }
 
         .message.user {
-            background: var(--gold-gradient);
+            background: linear-gradient(135deg, var(--gold) 0%, #FFB347 100%);
             color: var(--black);
+            border: none;
             margin-left: auto;
-            border-bottom-right-radius: 0.25rem;
-        }
-
-        .message.ai {
-            background: var(--bg-surface);
-            border: 1px solid var(--border);
-            border-bottom-left-radius: 0.25rem;
         }
 
         .message img {
@@ -262,17 +278,9 @@
             margin: 0.5rem 0;
         }
 
-        .message pre {
-            background: rgba(0, 0, 0, 0.3) !important;
-            border-radius: 0.75rem;
-            padding: 1rem;
-            margin: 0.5rem 0;
-            overflow-x: auto;
-        }
-
         .input-area {
             padding: 1rem 1.25rem;
-            background: var(--bg-surface);
+            background: var(--surface);
             border-top: 1px solid var(--border);
             backdrop-filter: blur(20px);
         }
@@ -280,7 +288,7 @@
         .input-wrap {
             display: flex;
             gap: 0.75rem;
-            background: rgba(0, 0, 0, 0.2);
+            background: var(--surface-dark);
             border: 1px solid var(--border);
             border-radius: 1rem;
             padding: 0.75rem;
@@ -289,7 +297,7 @@
 
         .input-wrap:focus-within {
             border-color: var(--gold);
-            box-shadow: 0 0 0 1px var(--gold), 0 0 20px var(--gold-glow);
+            box-shadow: 0 0 0 1px var(--gold-glow);
         }
 
         .chat-input {
@@ -305,6 +313,10 @@
             line-height: 1.5;
         }
 
+        .chat-input::placeholder {
+            color: var(--text-dim);
+        }
+
         .action-btn {
             background: none;
             border: none;
@@ -318,8 +330,8 @@
         }
 
         .action-btn:hover {
-            color: var(--gold-bright);
-            background: var(--gold-glow);
+            color: var(--gold);
+            background: var(--gold-dim);
         }
 
         .file-preview {
@@ -348,63 +360,9 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transition: transform 0.2s ease;
         }
 
-        .remove-file {
-            position: absolute;
-            top: 0.25rem;
-            right: 0.25rem;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: rgba(0, 0, 0, 0.5);
-            border: 1px solid var(--border);
-            color: var(--text);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            font-size: 0.75rem;
-            backdrop-filter: blur(4px);
-            transition: all 0.2s ease;
-        }
-
-        .remove-file:hover {
-            background: rgba(255, 0, 0, 0.3);
-            border-color: rgba(255, 0, 0, 0.5);
-        }
-
-        .empty-state {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            gap: 1rem;
-            color: var(--text-dim);
-            text-align: center;
-            padding: 2rem;
-        }
-
-        .empty-state svg {
-            width: 48px;
-            height: 48px;
-            stroke: var(--gold);
-            opacity: 0.5;
-        }
-
-        .empty-state h3 {
-            font-weight: 500;
-            color: var(--text);
-        }
-
-        .empty-state p {
-            font-size: 0.875rem;
-            max-width: 400px;
-        }
-
-        @keyframes slideIn {
+        @keyframes slideUp {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
@@ -425,32 +383,11 @@
         ::-webkit-scrollbar-thumb:hover {
             background: var(--gold);
         }
-        .credits-display {
-    position: fixed;
-    top: 1rem;
-    right: 1rem;
-    background: var(--bg-surface);
-    border: 1px solid var(--border);
-    padding: 0.5rem 1rem;
-    border-radius: 0.75rem;
-    font-size: 0.875rem;
-    color: var(--gold);
-    backdrop-filter: blur(10px);
-    box-shadow: var(--shadow);
-    z-index: 100;
-}
-
-.message-cost {
-    font-size: 0.75rem;
-    color: var(--text-dim);
-    margin-top: 0.25rem;
-    opacity: 0.8;
-}
-
     </style>
 </head>
 <body>
-    <div class="login" id="loginScreen">
+    <!-- Login Modal -->
+    <div class="login-modal" id="loginScreen">
         <div class="login-form">
             <div class="logo">AI Chat</div>
             <input type="text" class="input" id="username" placeholder="Username">
@@ -459,35 +396,58 @@
         </div>
     </div>
 
+    <!-- Main App -->
     <div class="app" id="app" style="display: none;">
+        <!-- Sidebar -->
         <aside class="sidebar">
             <div class="logo">AI Chat</div>
-            <button class="btn" id="newChatBtn">New Chat</button>
-            <div class="chat-list" id="chatList"></div>
+            <button class="btn" id="newChatBtn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                New Chat
+            </button>
+            
+            <div class="chat-list" id="chatList">
+                <!-- Chat items will be inserted here -->
+            </div>
+
+            <div class="user-info">
+                <div class="user-avatar">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                </div>
+                <span id="username-display">Username</span>
+            </div>
         </aside>
 
+        <!-- Main Content -->
         <main class="main">
             <div class="header">
                 <select class="model-select" id="modelSelect">
-                    <option value="claude-opus">Claude 3 Opus</option>
-                    <option value="claude-sonnet">Claude 3 Sonnet</option>
-                    <option value="claude-haiku">Claude 3 Haiku</option>
-                    <option value="gpt4-vision">GPT-4 Vision</option>
+                    <option value="claude-3-opus-latest">Claude 3 Opus</option>
+                    <option value="claude-3-sonnet-latest">Claude 3 Sonnet</option>
+                    <option value="claude-3-haiku-latest">Claude 3 Haiku</option>
+                    <option value="gpt4o">GPT-4 Opus</option>
+                    <option value="gpt4o-mini">GPT-4 Opus Mini</option>
+                    <option value="o1">O1 Reasoning</option>
+                    <option value="o1-mini">O1 Mini</option>
                 </select>
-            </div>
-<div class="credits-display">
-    Credits: <span id="creditsAmount">0.00</span>
-</div>
-
+                <div class="credits">Credits: <span id="creditsAmount">0.00</span></div>
 
             <div class="messages" id="messages">
+                <!-- Empty state -->
                 <div class="empty-state">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5">
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                     </svg>
                     <h3>Start a New Conversation</h3>
-                    <p>Type a message below to begin chatting</p>
+                    <p>Choose a model and start chatting</p>
                 </div>
+                <!-- Messages will be inserted here -->
             </div>
 
             <div class="input-area">
@@ -499,101 +459,126 @@
                         rows="1"
                     ></textarea>
                     
-                    <button class="action-btn upload-btn" id="uploadBtn">
+                    <!-- Upload button -->
+                    <button class="action-btn" id="uploadBtn" title="Upload files">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242M12 12v9m4-4-4-4-4 4"/>
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
                         </svg>
                     </button>
-                    <input type="file" id="fileInput" hidden multiple accept="image/*,.pdf,.txt">
                     
-                    <button class="action-btn send-btn" id="sendBtn">
+                    <!-- Record button -->
+                    <button class="action-btn" id="recordBtn" title="Voice input">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                            <line x1="12" y1="19" x2="12" y2="22"/>
+                        </svg>
+                    </button>
+
+                    <!-- Send button -->
+                    <button class="action-btn" id="sendBtn" title="Send message">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="m5 12 14-7-7 14v-7l-7-7"/>
                         </svg>
                     </button>
                 </div>
+
+                <!-- Hidden file input -->
+                <input type="file" id="fileInput" hidden multiple accept="image/*, .pdf, .txt, .md, .csv">
+                
+                <!-- File preview area -->
                 <div class="file-preview" id="filePreview"></div>
             </div>
         </main>
     </div>
 
-    <script>// Global state
-let token = null;
-let currentChatId = null;
-let messageHistory = [];
-let uploadedFiles = [];
-let user = null;
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash/4.17.21/lodash.min.js"></script>
+    <script>
+// Global state management
+const state = {
+    token: null,
+    currentChatId: null,
+    messageHistory: [],
+    uploadedFiles: [],
+    user: null,
+    isRecording: false,
+    mediaRecorder: null,
+    audioChunks: []
+};
 
-// Model configurations
+// Model configurations with costs and capabilities
 const MODELS = {
     'claude-3-opus-latest': {
         name: 'Claude 3 Opus',
-        description: 'Most capable Claude model for complex tasks',
+        description: 'Most capable Claude model',
         supportsVision: true,
         contextWindow: 200000
     },
     'claude-3-sonnet-latest': {
         name: 'Claude 3 Sonnet',
-        description: 'Fast and capable for most tasks',
+        description: 'Fast and capable',
         supportsVision: true,
         contextWindow: 128000
     },
     'claude-3-haiku-latest': {
         name: 'Claude 3 Haiku',
-        description: 'Fastest Claude model for simple tasks',
+        description: 'Fastest Claude model',
         supportsVision: true,
         contextWindow: 128000
     },
     'gpt4o': {
         name: 'GPT-4 Opus',
-        description: 'High-intelligence flagship model',
-        supportsVision: false,
+        description: 'Advanced reasoning',
+        supportsVision: true,
         contextWindow: 128000
     },
     'gpt4o-mini': {
         name: 'GPT-4 Opus Mini',
-        description: 'Fast, affordable model for focused tasks',
-        supportsVision: false,
+        description: 'Fast and efficient',
+        supportsVision: true,
         contextWindow: 128000
     },
     'o1': {
         name: 'O1 Reasoning',
-        description: 'Advanced reasoning for complex tasks (slower)',
-        supportsVision: false,
+        description: 'Complex problem solving',
+        supportsVision: true,
         contextWindow: 128000
     },
     'o1-mini': {
-        name: 'O1 Mini Reasoning',
-        description: 'Lighter reasoning model (slower)',
-        supportsVision: false,
+        name: 'O1 Mini',
+        description: 'Efficient reasoning',
+        supportsVision: true,
         contextWindow: 128000
     }
 };
 
-// Initialize event listeners
-document.addEventListener('DOMContentLoaded', () => {
-    setupEventListeners();
-    initializeModelSelect();
-    checkSavedToken();
+// Initialize marked configuration
+marked.setOptions({
+    highlight: (code, lang) => {
+        if (lang && hljs.getLanguage(lang)) {
+            return hljs.highlight(code, { language: lang }).value;
+        }
+        return hljs.highlightAuto(code).value;
+    },
+    breaks: true,
+    gfm: true
 });
 
-// Setup model selector
-function initializeModelSelect() {
-    const modelSelect = document.getElementById('modelSelect');
-    if (!modelSelect) return;
-
-    modelSelect.innerHTML = '';
-    Object.entries(MODELS).forEach(([id, model]) => {
-        const option = document.createElement('option');
-        option.value = id;
-        option.textContent = model.name;
-        option.title = model.description;
-        modelSelect.appendChild(option);
-    });
-}
+// Event Listeners Setup
+document.addEventListener('DOMContentLoaded', () => {
+    setupEventListeners();
+    setupModelSelect();
+    checkSavedToken();
+    setupVoiceInput();
+});
 
 function setupEventListeners() {
-    // Login handling
+    // Login handlers
     document.getElementById('loginBtn')?.addEventListener('click', login);
     document.getElementById('password')?.addEventListener('keydown', e => {
         if (e.key === 'Enter') login();
@@ -605,9 +590,10 @@ function setupEventListeners() {
         document.getElementById('fileInput').click();
     });
     document.getElementById('sendBtn')?.addEventListener('click', sendMessage);
+    document.getElementById('recordBtn')?.addEventListener('click', toggleRecording);
     document.getElementById('fileInput')?.addEventListener('change', handleFileUpload);
 
-    // Message input auto-resize
+    // Message input
     const messageInput = document.getElementById('messageInput');
     if (messageInput) {
         messageInput.addEventListener('input', () => {
@@ -621,15 +607,32 @@ function setupEventListeners() {
             }
         });
     }
+
+    // Window events
+    window.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && state.isRecording) {
+            stopRecording();
+        }
+    });
 }
 
+function setupModelSelect() {
+    const select = document.getElementById('modelSelect');
+    if (!select) return;
+
+    select.innerHTML = Object.entries(MODELS).map(([id, model]) => `
+        <option value="${id}">${model.name}</option>
+    `).join('');
+}
+
+// Authentication
 async function login() {
     try {
         const username = document.getElementById('username').value;
         const password = document.getElementById('password').value;
 
         if (!username || !password) {
-            alert('Please enter both username and password');
+            showNotification('Please enter both username and password', 'error');
             return;
         }
 
@@ -641,18 +644,19 @@ async function login() {
 
         if (response.ok) {
             const data = await response.json();
-            token = data.token;
-            user = data.user;
-            localStorage.setItem('token', token);
+            state.token = data.token;
+            state.user = data.user;
+            localStorage.setItem('token', data.token);
+            
             showApp();
-            updateCreditsDisplay(user.credits);
+            updateUserInfo();
             await initializeApp();
         } else {
             throw new Error('Login failed');
         }
     } catch (error) {
         console.error('Login error:', error);
-        alert('Login failed. Please check your credentials and try again.');
+        showNotification('Login failed. Please check your credentials.', 'error');
     }
 }
 
@@ -661,70 +665,118 @@ function showApp() {
     document.getElementById('app').style.display = 'grid';
 }
 
+async function checkSavedToken() {
+    const savedToken = localStorage.getItem('token');
+    if (savedToken) {
+        state.token = savedToken;
+        try {
+            const response = await fetch('/api/verify', {
+                headers: { 'Authorization': `Bearer ${savedToken}` }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                state.user = data.user;
+                showApp();
+                updateUserInfo();
+                await initializeApp();
+            } else {
+                throw new Error('Invalid token');
+            }
+        } catch {
+            localStorage.removeItem('token');
+            location.reload();
+        }
+    }
+}
+
+// Chat Management
 async function startNewChat() {
     try {
         const response = await fetch('/api/chats', {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
+            headers: getHeaders()
         });
         
         if (!response.ok) throw new Error('Failed to create chat');
         
         const chat = await response.json();
-        currentChatId = chat.id;
-        messageHistory = [];
+        state.currentChatId = chat.id;
+        state.messageHistory = [];
         
         showEmptyState();
         await loadChats();
         return chat;
     } catch (error) {
-        console.error('Failed to start new chat:', error);
-        alert('Failed to create new chat. Please try again.');
-        throw error;
+        console.error('Failed to create chat:', error);
+        showNotification('Failed to create new chat', 'error');
     }
 }
 
 async function loadChats() {
     try {
         const response = await fetch('/api/chats', {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: getHeaders()
         });
         
         if (!response.ok) throw new Error('Failed to load chats');
         
         const chats = await response.json();
-        const chatList = document.getElementById('chatList');
-        if (!chatList) return;
-        
-        chatList.innerHTML = '';
-        
-        chats.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-             .forEach(chat => {
-                const item = document.createElement('div');
-                item.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
-                
-                const title = chat.messages?.[0]?.content?.text || 'New Chat';
-                const displayTitle = title.substring(0, 25) + (title.length > 25 ? '...' : '');
-                
-                item.innerHTML = `
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                    </svg>
-                    <span>${displayTitle}</span>
-                `;
-                
-                item.dataset.chatId = chat.id;
-                item.addEventListener('click', () => loadChat(chat.id));
-                chatList.appendChild(item);
-             });
+        renderChatList(chats);
     } catch (error) {
         console.error('Failed to load chats:', error);
+        showNotification('Failed to load chat history', 'error');
     }
 }
 
+function renderChatList(chats) {
+    const chatList = document.getElementById('chatList');
+    if (!chatList) return;
+    
+    chatList.innerHTML = '';
+    
+    chats.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+         .forEach(chat => {
+            const item = document.createElement('div');
+            item.className = `chat-item ${chat.id === state.currentChatId ? 'active' : ''}`;
+            
+            const title = chat.messages?.[0]?.content?.text || 'New Chat';
+            const displayTitle = title.substring(0, 25) + (title.length > 25 ? '...' : '');
+            
+            item.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                <span>${displayTitle}</span>
+            `;
+            
+            item.dataset.chatId = chat.id;
+            item.addEventListener('click', () => loadChat(chat.id));
+            chatList.appendChild(item);
+         });
+}
+
+async function loadChat(chatId) {
+    try {
+        const response = await fetch(`/api/chats/${chatId}`, {
+            headers: getHeaders()
+        });
+        
+        if (!response.ok) throw new Error('Failed to load chat');
+        
+        const chat = await response.json();
+        state.currentChatId = chatId;
+        state.messageHistory = chat.messages || [];
+        
+        renderMessages();
+        updateActiveChatSelection(chatId);
+    } catch (error) {
+        console.error('Failed to load chat:', error);
+        showNotification('Failed to load chat', 'error');
+    }
+}
+
+// File Handling
 async function handleFileUpload(event) {
     const files = event.target.files;
     if (!files.length) return;
@@ -742,24 +794,24 @@ async function handleFileUpload(event) {
     }
 
     if (oversizedFiles.length) {
-        alert(`Some files exceed the 20MB limit: ${oversizedFiles.join(', ')}`);
+        showNotification(`Some files exceed the 20MB limit: ${oversizedFiles.join(', ')}`, 'warning');
     }
 
     try {
         const response = await fetch('/api/upload', {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` },
+            headers: { 'Authorization': `Bearer ${state.token}` },
             body: formData
         });
 
         if (!response.ok) throw new Error('Upload failed');
 
         const result = await response.json();
-        uploadedFiles = uploadedFiles.concat(result);
+        state.uploadedFiles = state.uploadedFiles.concat(result);
         updateFilePreview();
     } catch (error) {
         console.error('File upload failed:', error);
-        alert('Failed to upload files. Please try again.');
+        showNotification('Failed to upload files', 'error');
     }
 
     event.target.value = '';
@@ -772,39 +824,34 @@ async function sendMessage() {
     const message = input.value.trim();
     const selectedModel = document.getElementById('modelSelect').value;
     
-    if (!message && !uploadedFiles.length) return;
+    if (!message && !state.uploadedFiles.length) return;
 
     try {
-        if (!currentChatId) {
+        if (!state.currentChatId) {
             const newChat = await startNewChat();
             if (!newChat) return;
         }
 
-        // Add user message to UI
-        appendMessage(message, true, null, uploadedFiles);
+        appendMessage({
+            role: 'user',
+            content: {
+                text: message,
+                files: state.uploadedFiles
+            }
+        });
+        
         input.value = '';
         input.style.height = 'auto';
-
-        // Format message history
-        const formattedHistory = messageHistory.map(msg => ({
-            role: msg.role === 'user' ? 'user' : 'assistant',
-            content: typeof msg.content === 'object' ? msg.content.text : msg.content
-        }));
-
-        // Stream the response
+        
         const response = await fetch('/api/chat/stream', {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
+            headers: getHeaders(),
             body: JSON.stringify({
-                chatId: currentChatId,
+                chatId: state.currentChatId,
                 message: message,
-                files: uploadedFiles,
+                files: state.uploadedFiles,
                 model: selectedModel,
-                history: formattedHistory,
-                system: "You are a helpful AI assistant that provides clear and accurate responses."
+                history: state.messageHistory
             })
         });
 
@@ -817,7 +864,6 @@ async function sendMessage() {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let currentResponse = '';
-        let messageCost = null;
 
         while (true) {
             const { done, value } = await reader.read();
@@ -831,14 +877,10 @@ async function sendMessage() {
                     try {
                         const data = JSON.parse(line.slice(5));
                         if (data.type === 'cost') {
-                            messageCost = data.cost;
-                            if (user?.credits !== undefined) {
-                                user.credits -= data.cost;
-                                updateCreditsDisplay(user.credits);
-                            }
+                            updateCredits(data.cost);
                         } else if (data.content) {
                             currentResponse += data.content;
-                            updateLastMessage(currentResponse, messageCost);
+                            updateLastMessage(currentResponse);
                         }
                     } catch (e) {
                         console.error('Error parsing stream:', e);
@@ -847,52 +889,110 @@ async function sendMessage() {
             }
         }
 
-        // Store message in history
-        messageHistory.push(
+        state.messageHistory.push(
             { 
                 role: 'user', 
-                content: uploadedFiles.length ? {
+                content: {
                     text: message,
-                    files: uploadedFiles
-                } : message
+                    files: state.uploadedFiles
+                }
             },
             { 
                 role: 'assistant', 
-                content: currentResponse,
-                cost: messageCost 
+                content: currentResponse
             }
         );
 
-        // Save chat
-        await fetch(`/api/chats/${currentChatId}`, {
-            method: 'PUT',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                messages: messageHistory
-            })
-        });
-
-        // Reset files and update UI
-        uploadedFiles = [];
+        await saveChat();
+        
+        state.uploadedFiles = [];
         updateFilePreview();
         await loadChats();
 
     } catch (error) {
         console.error('Failed to send message:', error);
-        alert('Failed to send message. Please try again.');
+        showNotification('Failed to send message', 'error');
     }
 }
 
-// Helper functions for UI updates
+// Voice Input
+async function setupVoiceInput() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        state.mediaRecorder = new MediaRecorder(stream);
+        
+        state.mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) {
+                state.audioChunks.push(e.data);
+            }
+        };
+
+        state.mediaRecorder.onstop = async () => {
+            const audioBlob = new Blob(state.audioChunks, { type: 'audio/wav' });
+            state.audioChunks = [];
+            await processAudioInput(audioBlob);
+        };
+    } catch (error) {
+        console.error('Microphone access error:', error);
+        document.getElementById('recordBtn').style.display = 'none';
+    }
+}
+
+function toggleRecording() {
+    if (state.isRecording) {
+        stopRecording();
+    } else {
+        startRecording();
+    }
+}
+
+function startRecording() {
+    if (!state.mediaRecorder) return;
+    
+    state.isRecording = true;
+    state.mediaRecorder.start();
+    document.getElementById('recordBtn').classList.add('recording');
+    showNotification('Recording... Press Escape to cancel', 'info');
+}
+
+function stopRecording() {
+    if (!state.mediaRecorder) return;
+    
+    state.isRecording = false;
+    state.mediaRecorder.stop();
+    document.getElementById('recordBtn').classList.remove('recording');
+}
+
+async function processAudioInput(audioBlob) {
+    try {
+        const formData = new FormData();
+        formData.append('audio', audioBlob);
+        
+        const response = await fetch('/api/transcribe', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${state.token}` },
+            body: formData
+        });
+
+        if (!response.ok) throw new Error('Transcription failed');
+        
+        const { text } = await response.json();
+        const messageInput = document.getElementById('messageInput');
+        messageInput.value = text;
+        messageInput.focus();
+    } catch (error) {
+        console.error('Audio processing error:', error);
+        showNotification('Failed to process voice input', 'error');
+    }
+}
+
+// UI Updates continued...
 function updateFilePreview() {
     const preview = document.getElementById('filePreview');
     if (!preview) return;
     
     preview.innerHTML = '';
-    uploadedFiles.forEach((file, index) => {
+    state.uploadedFiles.forEach((file, index) => {
         const item = document.createElement('div');
         item.className = 'preview-item';
         
@@ -903,12 +1003,12 @@ function updateFilePreview() {
             `;
         } else {
             item.innerHTML = `
-                <div style="padding: 1rem; text-align: center;">
+                <div class="file-icon">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
                         <polyline points="13 2 13 9 20 9"/>
                     </svg>
-                    <div style="font-size: 0.75rem; margin-top: 0.5rem;">${file.name}</div>
+                    <div class="file-name">${file.name}</div>
                 </div>
                 <button class="remove-file" onclick="removeFile(${index})">&times;</button>
             `;
@@ -918,43 +1018,67 @@ function updateFilePreview() {
 }
 
 function removeFile(index) {
-    uploadedFiles.splice(index, 1);
+    state.uploadedFiles.splice(index, 1);
     updateFilePreview();
 }
 
-function updateCreditsDisplay(credits) {
-    const display = document.getElementById('creditsAmount');
-    if (display) {
-        display.textContent = (credits || 0).toFixed(2);
+function updateCredits(cost) {
+    if (state.user?.credits !== undefined) {
+        state.user.credits -= cost;
+        const display = document.getElementById('creditsAmount');
+        if (display) {
+            display.textContent = state.user.credits.toFixed(2);
+        }
+    }
+}
+
+function updateUserInfo() {
+    const usernameDisplay = document.getElementById('username-display');
+    if (usernameDisplay && state.user) {
+        usernameDisplay.textContent = state.user.username;
+    }
+    
+    const creditsDisplay = document.getElementById('creditsAmount');
+    if (creditsDisplay && state.user) {
+        creditsDisplay.textContent = state.user.credits.toFixed(2);
     }
 }
 
 function showEmptyState() {
     const messagesContainer = document.getElementById('messages');
-    if (messagesContainer) {
-        messagesContainer.innerHTML = `
-            <div class="empty-state">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
-                <h3>Start a New Conversation</h3>
-                <p>Type a message below to begin chatting</p>
-            </div>
-        `;
-    }
+    if (!messagesContainer) return;
+    
+    messagesContainer.innerHTML = `
+        <div class="empty-state">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <h3>Start a New Conversation</h3>
+            <p>Choose a model and start chatting</p>
+        </div>
+    `;
 }
 
-function appendMessage(content, isUser, cost = null, files = []) {
-    const messages = document.getElementById('messages');
-    if (!messages) return;
+function updateActiveChatSelection(chatId) {
+    document.querySelectorAll('.chat-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.chatId === chatId);
+    });
+}
+
+// Message Rendering
+function appendMessage(message) {
+    const messagesContainer = document.getElementById('messages');
+    if (!messagesContainer) return;
     
-    const emptyState = messages.querySelector('.empty-state');
+    const emptyState = messagesContainer.querySelector('.empty-state');
     if (emptyState) {
-        messages.removeChild(emptyState);
+        messagesContainer.removeChild(emptyState);
     }
     
     const messageGroup = document.createElement('div');
     messageGroup.className = 'message-group';
+    
+    const isUser = message.role === 'user';
     
     const avatar = document.createElement('div');
     avatar.className = `message-avatar ${isUser ? 'user' : 'ai'}`;
@@ -971,39 +1095,39 @@ function appendMessage(content, isUser, cost = null, files = []) {
     if (isUser) {
         let finalContent = '';
         
-        if (files && files.length > 0) {
-            const filesHtml = files.map(file => {
+        if (message.content.files?.length > 0) {
+            const filesHtml = message.content.files.map(file => {
                 if (file.type === 'image') {
                     return `<img src="${file.base64}" alt="Upload" style="max-width: 200px; border-radius: 0.5rem; margin: 0.5rem 0;">`;
                 }
-                return `<div>[File: ${file.name}]</div>`;
+                return `<div class="file-attachment">[File: ${file.name}]</div>`;
             }).join('');
             finalContent += filesHtml;
         }
         
-        if (content) {
-            finalContent += `<div>${content}</div>`;
+        if (message.content.text) {
+            finalContent += `<div>${marked.parse(message.content.text)}</div>`;
         }
         
         messageDiv.innerHTML = finalContent;
     } else {
         try {
-            messageDiv.innerHTML = marked.parse(content);
+            messageDiv.innerHTML = marked.parse(message.content);
             messageDiv.querySelectorAll('pre code').forEach(block => {
                 hljs.highlightBlock(block);
             });
         } catch (error) {
             console.error('Markdown parsing error:', error);
-            messageDiv.textContent = content;
+            messageDiv.textContent = message.content;
         }
     }
 
     messageContent.appendChild(messageDiv);
-
-    if (!isUser && cost) {
+    
+    if (!isUser && message.cost) {
         const costDisplay = document.createElement('div');
         costDisplay.className = 'message-cost';
-        costDisplay.textContent = `Credits used: ${cost.toFixed(4)}`;
+        costDisplay.textContent = `Credits used: ${message.cost.toFixed(4)}`;
         messageContent.appendChild(costDisplay);
     }
     
@@ -1015,11 +1139,11 @@ function appendMessage(content, isUser, cost = null, files = []) {
         messageGroup.appendChild(messageContent);
     }
     
-    messages.appendChild(messageGroup);
-    messages.scrollTop = messages.scrollHeight;
+    messagesContainer.appendChild(messageGroup);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-function updateLastMessage(content, cost = null) {
+function updateLastMessage(content) {
     const messages = document.getElementById('messages');
     if (!messages) return;
     
@@ -1032,62 +1156,71 @@ function updateLastMessage(content, cost = null) {
             messageDiv.querySelectorAll('pre code').forEach(block => {
                 hljs.highlightBlock(block);
             });
-
-            if (cost) {
-                let costDisplay = lastMessage.querySelector('.message-cost');
-                if (!costDisplay) {
-                    costDisplay = document.createElement('div');
-                    costDisplay.className = 'message-cost';
-                    lastMessage.querySelector('.message-content').appendChild(costDisplay);
-                }
-                costDisplay.textContent = `Credits used: ${cost.toFixed(4)}`;
-            }
+            messages.scrollTop = messages.scrollHeight;
         } catch (error) {
             console.error('Markdown parsing error:', error);
             messageDiv.textContent = content;
         }
-        messages.scrollTop = messages.scrollHeight;
     } else {
-        appendMessage(content, false, cost);
+        appendMessage({
+            role: 'assistant',
+            content: content
+        });
     }
 }
 
-// Additional utility functions for tokens and costs
-function estimateTokenCount(text) {
-    // Rough estimation: ~4 chars per token
-    return Math.ceil(text.length / 4);
+// Utility Functions
+function getHeaders() {
+    return {
+        'Authorization': `Bearer ${state.token}`,
+        'Content-Type': 'application/json'
+    };
 }
 
-function getModelContextWindow(modelId) {
-    return MODELS[modelId]?.contextWindow || 128000;
+async function saveChat() {
+    try {
+        await fetch(`/api/chats/${state.currentChatId}`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify({
+                messages: state.messageHistory
+            })
+        });
+    } catch (error) {
+        console.error('Failed to save chat:', error);
+        showNotification('Failed to save chat', 'error');
+    }
 }
 
-function pruneHistory(history, modelId) {
-    const contextWindow = getModelContextWindow(modelId);
-    let totalTokens = 0;
-    return history.filter(msg => {
-        const tokens = estimateTokenCount(typeof msg.content === 'string' ? msg.content : msg.content.text);
-        totalTokens += tokens;
-        return totalTokens <= contextWindow;
-    });
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.classList.add('fade-out');
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
 }
 
 // Initialize the app
 async function initializeApp() {
     try {
         await loadChats();
-        if (currentChatId) {
-            await loadChat(currentChatId);
+        if (state.currentChatId) {
+            await loadChat(state.currentChatId);
         }
     } catch (error) {
         console.error('Initialization error:', error);
-        alert('Failed to initialize the application. Please try refreshing the page.');
+        showNotification('Failed to initialize the application', 'error');
     }
 }
 
-// Export key functions for global access
+// Export necessary functions to window for inline handlers
 window.removeFile = removeFile;
-window.sendMessage = sendMessage;
+window.toggleRecording = toggleRecording;
     </script>
 </body>
 </html>
