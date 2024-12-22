@@ -232,7 +232,7 @@
         <select class="qt-input" id="qt-model">
           <option value="gpt4o-mini">GPT-4O-Mini (Default)</option>
           <option value="gpt4o">GPT-4O (Advanced)</option>
-          <option value="claude"></option>
+          <option value="claude">Claude Sonnet (Best at anything)</option>
         </select>
       </div>
       <div style="margin-top:8px">
