@@ -39,7 +39,13 @@ from PIL import Image
 import io
 import av
 from pathlib import Path
-
+import base64
+from typing import Optional, List
+import os
+from datetime import datetime
+import uuid
+from fastapi.responses import StreamingResponse
+import asyncio
 
 # Initialize
 app = FastAPI()
@@ -47,6 +53,8 @@ redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=T
 security = HTTPBearer()
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
+
 
 # Enhanced Model Configurations
 # Config
@@ -139,6 +147,313 @@ def update_user(user: Dict):
 def calculate_cost(model: str, chars: int) -> float:
     cost = COSTS[model]
     return ((chars / 1000) * cost["input"] + (chars * 1.5 / 1000) * cost["output"]) * 40
+
+
+# Add these global variables
+CHATS_FILE = "db/chats.json"
+UPLOADS_DIR = "uploads"
+os.makedirs("db", exist_ok=True)
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+
+if not os.path.exists(CHATS_FILE):
+    with open(CHATS_FILE, 'w') as f:
+        json.dump({"chats": []}, f)
+
+# New route to serve the AI chat interface
+@app.get("/ai")
+async def serve_chat_ui():
+    with open("templates/ai.html", "r") as f:
+        return HTMLResponse(content=f.read())
+
+# Chat management functions
+def get_user_chats(user_id: str) -> List[dict]:
+    with open(CHATS_FILE, 'r') as f:
+        data = json.load(f)
+        return [chat for chat in data["chats"] if chat["user_id"] == user_id]
+
+def save_chat(chat: dict):
+    with open(CHATS_FILE, 'r+') as f:
+        data = json.load(f)
+        chat_idx = next((i for i, c in enumerate(data["chats"]) 
+                        if c["id"] == chat["id"]), None)
+        if chat_idx is not None:
+            data["chats"][chat_idx] = chat
+        else:
+            data["chats"].append(chat)
+        f.seek(0)
+        f.truncate()
+        json.dump(data, f, indent=2)
+
+@app.post("/api/chats")
+async def create_chat(auth: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=["HS256"])
+        user = get_user(payload["user_id"])
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid user")
+        
+        chat = {
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "title": "New Chat",
+            "created_at": datetime.utcnow().isoformat(),
+            "messages": []
+        }
+        save_chat(chat)
+        return chat
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+@app.get("/api/chats")
+async def get_chats(auth: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=["HS256"])
+        user = get_user(payload["user_id"])
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid user")
+        return get_user_chats(user["id"])
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+@app.put("/api/chats/{chat_id}/title")
+async def update_chat_title(
+    chat_id: str, 
+    title: str,
+    auth: HTTPAuthorizationCredentials = Depends(security)
+):
+    try:
+        payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=["HS256"])
+        user = get_user(payload["user_id"])
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid user")
+            
+        chat = next((c for c in get_user_chats(user["id"]) 
+                    if c["id"] == chat_id), None)
+        if not chat:
+            raise HTTPException(status_code=404, detail="Chat not found")
+            
+        chat["title"] = title
+        save_chat(chat)
+        return {"status": "success"}
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+@app.delete("/api/chats/{chat_id}")
+async def delete_chat(
+    chat_id: str,
+    auth: HTTPAuthorizationCredentials = Depends(security)
+):
+    try:
+        payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=["HS256"])
+        user = get_user(payload["user_id"])
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid user")
+        
+        with open(CHATS_FILE, 'r+') as f:
+            data = json.load(f)
+            data["chats"] = [c for c in data["chats"] 
+                           if not (c["id"] == chat_id and c["user_id"] == user["id"])]
+            f.seek(0)
+            f.truncate()
+            json.dump(data, f, indent=2)
+        return {"status": "success"}
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+@app.post("/api/upload")
+async def upload_file(
+    files: List[UploadFile],
+    auth: HTTPAuthorizationCredentials = Depends(security)
+):
+    try:
+        payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=["HS256"])
+        user = get_user(payload["user_id"])
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid user")
+        
+        uploaded_files = []
+        for file in files:
+            file_ext = os.path.splitext(file.filename)[1]
+            safe_filename = f"{uuid.uuid4()}{file_ext}"
+            file_path = os.path.join(UPLOADS_DIR, safe_filename)
+            
+            # Save file
+            content = await file.read()
+            with open(file_path, "wb") as f:
+                f.write(content)
+            
+            # For images, generate base64
+            if file.content_type.startswith('image/'):
+                base64_data = base64.b64encode(content).decode('utf-8')
+                uploaded_files.append({
+                    "path": f"/uploads/{safe_filename}",
+                    "type": "image",
+                    "base64": f"data:{file.content_type};base64,{base64_data}"
+                })
+            else:
+                uploaded_files.append({
+                    "path": f"/uploads/{safe_filename}",
+                    "type": "file",
+                    "name": file.filename
+                })
+        
+        return uploaded_files
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+async def stream_gpt(messages: List[dict], model: str):
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {os.getenv('opene')}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "gpt-4" if model == "gpt4o" else "gpt-3.5-turbo",
+                "messages": messages,
+                "stream": True
+            },
+            timeout=None
+        )
+        
+        async for line in response.aiter_lines():
+            if line.startswith('data: '):
+                if line.strip() == 'data: [DONE]':
+                    break
+                try:
+                    chunk = json.loads(line[6:])
+                    content = chunk['choices'][0]['delta'].get('content', '')
+                    if content:
+                        yield f"data: {json.dumps({'content': content})}\n\n"
+                except json.JSONDecodeError:
+                    continue
+
+async def stream_claude(messages: List[dict], model: str):
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": os.getenv('secretant'),
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": model,
+                "messages": messages,
+                "stream": True
+            },
+            timeout=None
+        )
+        
+        async for line in response.aiter_lines():
+            if line.startswith('data: '):
+                try:
+                    chunk = json.loads(line[6:])
+                    content = chunk.get('delta', {}).get('text', '')
+                    if content:
+                        yield f"data: {json.dumps({'content': content})}\n\n"
+                except json.JSONDecodeError:
+                    continue
+
+@app.post("/api/chat/stream")
+async def stream_chat(
+    request: dict,
+    auth: HTTPAuthorizationCredentials = Depends(security)
+):
+    try:
+        payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=["HS256"])
+        user = get_user(payload["user_id"])
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid user")
+
+        # Format messages
+        formatted_messages = []
+        for msg in request.get("history", []):
+            content = msg["content"]
+            # Handle files/images
+            if isinstance(content, dict) and content.get("files"):
+                files_content = []
+                for file in content["files"]:
+                    if file["type"] == "image":
+                        files_content.append({
+                            "type": "image_url",
+                            "image_url": {"url": file["base64"]}
+                        })
+                files_content.append({
+                    "type": "text",
+                    "text": content["text"]
+                })
+                formatted_messages.append({
+                    "role": msg["role"],
+                    "content": files_content
+                })
+            else:
+                formatted_messages.append({
+                    "role": msg["role"],
+                    "content": content
+                })
+
+        # Add current message
+        current_content = []
+        if request.get("files"):
+            for file in request["files"]:
+                if file["type"] == "image":
+                    current_content.append({
+                        "type": "image_url",
+                        "image_url": {"url": file["base64"]}
+                    })
+        current_content.append({
+            "type": "text",
+            "text": request["message"]
+        })
+        formatted_messages.append({
+            "role": "user",
+            "content": current_content if len(current_content) > 1 else request["message"]
+        })
+
+        # Stream based on model
+        if request["model"].startswith("gpt"):
+            stream = stream_gpt(formatted_messages, request["model"])
+        else:
+            stream = stream_claude(formatted_messages, request["model"])
+
+        async def wrapped_stream():
+            complete_response = ""
+            async for chunk in stream:
+                complete_response += json.loads(chunk[6:])["content"]
+                yield chunk
+            
+            # Save to chat history
+            chat = next((c for c in get_user_chats(user["id"]) 
+                        if c["id"] == request["chatId"]), None)
+            if chat:
+                # Save user message
+                chat["messages"].append({
+                    "role": "user",
+                    "content": {
+                        "text": request["message"],
+                        "files": request.get("files", [])
+                    } if request.get("files") else request["message"],
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+                # Save assistant message
+                chat["messages"].append({
+                    "role": "assistant",
+                    "content": complete_response,
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+                save_chat(chat)
+
+        return StreamingResponse(
+            wrapped_stream(),
+            media_type="text/event-stream"
+        )
+
+    except Exception as e:
+        logger.error(f"Error in stream_chat: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # Routes
 @app.get("/admin")
