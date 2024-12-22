@@ -3,88 +3,121 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Expansion AI</title>
+    <title>AI Chat</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tokyo-night-dark.min.css">
     <style>
         :root {
-            --bg-primary: #0a0a0c;
-            --bg-secondary: rgba(16, 16, 20, 0.7);
-            --bg-tertiary: rgba(24, 24, 28, 0.8);
-            --text-primary: #e2e8f0;
-            --text-secondary: #94a3b8;
-            --border-color: rgba(148, 163, 184, 0.1);
-            --accent-primary: #f59e0b;
-            --accent-secondary: #fbbf24;
-            --glow: rgba(245, 158, 11, 0.1);
-            --error: #ef4444;
-            --success: #22c55e;
+            --black: #0a0a0c;
+            --gold: #ffd700;
+            --gold-glow: rgba(255, 215, 0, 0.15);
+            --gold-gradient: linear-gradient(135deg, #ffd700, #ffb347);
+            --text: #e2e8f0;
+            --text-dim: #94a3b8;
+            --bg-surface: rgba(20, 20, 25, 0.95);
+            --border: rgba(255, 215, 0, 0.1);
         }
 
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-family: 'Plus Jakarta Sans', -apple-system, system-ui, sans-serif;
         }
 
         body {
-            background: var(--bg-primary);
-            color: var(--text-primary);
+            background: var(--black);
+            color: var(--text);
+            min-height: 100vh;
             line-height: 1.5;
-            height: 100vh;
-            overflow: hidden;
         }
 
-        .app-container {
+        .app {
             display: grid;
             grid-template-columns: 280px 1fr;
             height: 100vh;
-            background: linear-gradient(135deg, rgba(10, 10, 12, 0.95), rgba(16, 16, 20, 0.95));
-            backdrop-filter: blur(20px);
         }
 
-        /* Sidebar Styles */
-        .sidebar {
-            background: var(--bg-secondary);
-            border-right: 1px solid var(--border-color);
-            padding: 1.25rem;
-            display: flex;
-            flex-direction: column;
-            gap: 1.25rem;
-            backdrop-filter: blur(16px);
-        }
-
-        .logo {
-            font-size: 1.5rem;
-            font-weight: 500;
-            color: var(--accent-primary);
-            letter-spacing: -0.5px;
-        }
-
-        .new-chat-btn {
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            color: var(--bg-primary);
-            border: none;
-            padding: 0.875rem;
-            border-radius: 0.75rem;
-            font-weight: 500;
+        .login {
+            position: fixed;
+            inset: 0;
+            background: var(--black);
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 0.5rem;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-size: 0.875rem;
+            z-index: 100;
         }
 
-        .new-chat-btn:hover {
+        .login-form {
+            background: var(--bg-surface);
+            padding: 2.5rem;
+            border-radius: 1.5rem;
+            border: 1px solid var(--border);
+            width: 90%;
+            max-width: 400px;
+            backdrop-filter: blur(20px);
+            animation: slideIn 0.3s ease;
+        }
+
+        .logo {
+            font-size: 2rem;
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 2rem;
+            background: var(--gold-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px var(--gold-glow);
+        }
+
+        .input {
+            width: 100%;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            color: var(--text);
+            margin-bottom: 1rem;
+            font-size: 0.9375rem;
+            transition: all 0.2s ease;
+        }
+
+        .input:focus {
+            outline: none;
+            border-color: var(--gold);
+            box-shadow: 0 0 0 1px var(--gold), 0 0 20px var(--gold-glow);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 1rem;
+            border: none;
+            border-radius: 0.75rem;
+            font-weight: 500;
+            font-size: 0.9375rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: var(--gold-gradient);
+            color: var(--black);
+        }
+
+        .btn:hover {
             opacity: 0.9;
             transform: translateY(-1px);
+        }
+
+        .sidebar {
+            background: var(--bg-surface);
+            border-right: 1px solid var(--border);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            backdrop-filter: blur(20px);
         }
 
         .chat-list {
@@ -93,69 +126,62 @@
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
-            padding-right: 0.5rem;
         }
 
         .chat-item {
-            padding: 0.875rem;
+            padding: 0.875rem 1rem;
             border-radius: 0.75rem;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            color: var(--text-dim);
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.2s ease;
             font-size: 0.875rem;
-            color: var(--text-secondary);
             display: flex;
             align-items: center;
-            gap: 0.625rem;
+            gap: 0.75rem;
         }
 
         .chat-item:hover {
-            background: var(--bg-secondary);
-            border-color: var(--accent-primary);
-            color: var(--text-primary);
+            border-color: var(--gold);
+            color: var(--text);
+            transform: translateX(4px);
         }
 
         .chat-item.active {
-            background: var(--accent-primary);
-            border-color: transparent;
-            color: var(--bg-primary);
+            background: var(--gold-gradient);
+            border: none;
+            color: var(--black);
         }
 
-        /* Main Content Styles */
-        .main-content {
+        .main {
             display: flex;
             flex-direction: column;
             height: 100vh;
         }
 
-        .chat-header {
+        .header {
             padding: 1rem 1.5rem;
-            background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
             gap: 1rem;
-            backdrop-filter: blur(16px);
+            backdrop-filter: blur(20px);
         }
 
-        .model-selector {
+        .model-select {
             padding: 0.625rem 1rem;
-            border-radius: 0.5rem;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            color: var(--text);
             font-size: 0.875rem;
             outline: none;
-            cursor: pointer;
-            transition: all 0.2s;
+            min-width: 160px;
         }
 
-        .model-selector:hover {
-            border-color: var(--accent-primary);
-        }
-
-        .chat-messages {
+        .messages {
             flex: 1;
             overflow-y: auto;
             padding: 1.5rem;
@@ -166,7 +192,7 @@
 
         .message {
             max-width: 85%;
-            padding: 1.25rem;
+            padding: 1rem 1.25rem;
             border-radius: 1rem;
             line-height: 1.6;
             font-size: 0.9375rem;
@@ -175,94 +201,78 @@
 
         .message.user {
             margin-left: auto;
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            color: var(--bg-primary);
+            background: var(--gold-gradient);
+            color: var(--black);
         }
 
-        .message.assistant {
+        .message.ai {
             margin-right: auto;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
         }
 
-        .input-container {
-            padding: 1.25rem;
-            background: var(--bg-secondary);
-            border-top: 1px solid var(--border-color);
-            backdrop-filter: blur(16px);
+        .message pre {
+            background: rgba(0, 0, 0, 0.3) !important;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin: 0.5rem 0;
         }
 
-        .input-wrapper {
+        .input-area {
+            padding: 1rem 1.5rem;
+            background: var(--bg-surface);
+            border-top: 1px solid var(--border);
+            backdrop-filter: blur(20px);
+        }
+
+        .input-wrap {
             display: flex;
             gap: 0.75rem;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 0.75rem;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            border-radius: 1rem;
             padding: 0.75rem;
-            transition: all 0.2s;
+            transition: all 0.2s ease;
         }
 
-        .input-wrapper:focus-within {
-            border-color: var(--accent-primary);
-            box-shadow: 0 0 0 2px var(--glow);
+        .input-wrap:focus-within {
+            border-color: var(--gold);
+            box-shadow: 0 0 0 1px var(--gold), 0 0 20px var(--gold-glow);
         }
 
-        .message-input {
+        .chat-input {
             flex: 1;
-            background: transparent;
+            background: none;
             border: none;
-            color: var(--text-primary);
+            color: var(--text);
             font-size: 0.9375rem;
             outline: none;
             resize: none;
             min-height: 24px;
-            max-height: 200px;
-            padding: 0;
+            padding: 0.25rem;
         }
 
-        .message-input::placeholder {
-            color: var(--text-secondary);
-        }
-
-        .upload-btn {
-            background: transparent;
+        .action-btn {
+            background: none;
             border: none;
-            color: var(--text-secondary);
-            cursor: pointer;
+            color: var(--text-dim);
             padding: 0.5rem;
-            border-radius: 0.5rem;
-            transition: all 0.2s;
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
             display: flex;
             align-items: center;
-            justify-content: center;
         }
 
-        .upload-btn:hover {
-            color: var(--accent-primary);
-            background: var(--glow);
+        .action-btn:hover {
+            color: var(--gold);
+            background: var(--gold-glow);
         }
 
-        .send-btn {
-            background: transparent;
-            border: none;
-            color: var(--accent-primary);
-            cursor: pointer;
-            padding: 0.5rem;
-            border-radius: 0.5rem;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .send-btn:hover {
-            background: var(--glow);
-        }
-
-        .preview-container {
+        .file-preview {
             display: flex;
             gap: 0.75rem;
-            margin-top: 0.75rem;
+            padding: 0.75rem 0;
             flex-wrap: wrap;
         }
 
@@ -270,61 +280,45 @@
             position: relative;
             width: 100px;
             height: 100px;
-            border-radius: 0.5rem;
+            border-radius: 0.75rem;
             overflow: hidden;
-            border: 1px solid var(--border-color);
+            border: 1px solid var(--border);
         }
 
         .preview-item img {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            transition: transform 0.2s ease;
         }
 
-        .remove-preview {
+        .preview-item:hover img {
+            transform: scale(1.05);
+        }
+
+        .remove-file {
             position: absolute;
             top: 0.25rem;
             right: 0.25rem;
-            background: var(--bg-tertiary);
-            border: none;
-            color: var(--text-primary);
             width: 20px;
             height: 20px;
             border-radius: 50%;
-            cursor: pointer;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border);
+            color: var(--text);
             display: flex;
             align-items: center;
             justify-content: center;
+            cursor: pointer;
             font-size: 0.75rem;
+            backdrop-filter: blur(4px);
         }
 
         @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
-        /* Code block styling */
-        .message pre {
-            background: var(--bg-primary) !important;
-            border-radius: 0.5rem;
-            padding: 1rem;
-            margin: 0.5rem 0;
-        }
-
-        .message pre code {
-            background: transparent !important;
-            padding: 0 !important;
-            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-            font-size: 0.875rem;
-        }
-
-        /* Scrollbar styling */
         ::-webkit-scrollbar {
             width: 6px;
         }
@@ -334,216 +328,84 @@
         }
 
         ::-webkit-scrollbar-thumb {
-            background: var(--border-color);
+            background: var(--border);
             border-radius: 3px;
         }
 
         ::-webkit-scrollbar-thumb:hover {
-            background: var(--text-secondary);
-        }
-
-        /* Toast notification */
-        .toast {
-            position: fixed;
-            bottom: 1.5rem;
-            right: 1.5rem;
-            padding: 1rem 1.5rem;
-            border-radius: 0.75rem;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
-            font-size: 0.875rem;
-            animation: slideIn 0.3s ease;
-            z-index: 1000;
-            backdrop-filter: blur(16px);
-        }
-
-        .toast.success {
-            border-color: var(--success);
-        }
-
-        .toast.error {
-            border-color: var(--error);
-        }
-
-        /* Login Modal */
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(10, 10, 12, 0.8);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(8px);
-        }
-
-        .modal {
-            background: var(--bg-secondary);
-            padding: 2rem;
-            border-radius: 1rem;
-            width: 90%;
-            max-width: 360px;
-            border: 1px solid var(--border-color);
-            animation: slideIn 0.3s ease;
-        }
-
-        .modal-logo {
-            font-size: 1.75rem;
-            font-weight: 600;
-            text-align: center;
-            margin-bottom: 1.5rem;
-            color: var(--accent-primary);
-            letter-spacing: -0.5px;
-        }
-
-        .modal input {
-            width: 100%;
-            padding: 0.875rem;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 0.75rem;
-            color: var(--text-primary);
-            margin-bottom: 1rem;
-            font-size: 0.9375rem;
-            transition: all 0.2s;
-        }
-
-        .modal input:focus {
-            outline: none;
-            border-color: var(--accent-primary);
-            box-shadow: 0 0 0 2px var(--glow);
-        }
-
-        .modal button {
-            width: 100%;
-            padding: 0.875rem;
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            color: var(--bg-primary);
-            border: none;
-            border-radius: 0.75rem;
-            font-weight: 500;
-            font-size: 0.9375rem;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .modal button:hover {
-            opacity: 0.9;
+            background: var(--gold);
         }
     </style>
 </head>
 <body>
-    <!-- Login Modal -->
-    <div class="modal-overlay" id="loginModal" style="display: none;">
-        <div class="modal">
-            <div class="chat-header">
-                <select class="model-selector" id="modelSelector">
-                    <option value="gpt4o">GPT-4 Vision</option>
-                    <option value="gpt4o-mini">GPT-4 Mini</option>
+    <div class="login" id="loginScreen">
+        <div class="login-form">
+            <div class="logo">AI Chat</div>
+            <input type="text" class="input" id="username" placeholder="Username">
+            <input type="password" class="input" id="password" placeholder="Password">
+            <button class="btn" onclick="login()">Sign In</button>
+        </div>
+    </div>
+
+    <div class="app" id="app" style="display: none;">
+        <aside class="sidebar">
+            <div class="logo">AI Chat</div>
+            <button class="btn" onclick="startNewChat()">New Chat</button>
+            <div class="chat-list" id="chatList"></div>
+        </aside>
+
+        <main class="main">
+            <div class="header">
+                <select class="model-select" id="modelSelect">
+                    <option value="gpt4-vision">GPT-4 Vision</option>
                     <option value="claude-opus">Claude 3 Opus</option>
                     <option value="claude-sonnet">Claude 3 Sonnet</option>
                     <option value="claude-haiku">Claude 3 Haiku</option>
                 </select>
             </div>
 
-            <div class="chat-messages" id="chatMessages"></div>
+            <div class="messages" id="messages"></div>
 
-            <div class="input-container">
-                <div class="input-wrapper">
+            <div class="input-area">
+                <div class="input-wrap">
                     <textarea 
-                        class="message-input" 
+                        class="chat-input" 
                         id="messageInput" 
-                        placeholder="Type a message..." 
+                        placeholder="Message (Markdown & Code supported)" 
                         rows="1"
-                        onInput="autoResizeTextarea(this)"
+                        onInput="autoResize(this)"
                     ></textarea>
                     
-                    <label class="upload-btn" title="Upload files">
-                        <input type="file" id="fileUpload" multiple accept="image/*,.pdf,.doc,.docx,.txt" style="display: none;">
+                    <button class="action-btn upload-btn" onclick="document.getElementById('fileInput').click()">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="17 8 12 3 7 8"/>
-                            <line x1="12" y1="3" x2="12" y2="15"/>
+                            <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242M12 12v9m4-4-4-4-4 4"/>
                         </svg>
-                    </label>
-
-                    <button class="send-btn" onclick="sendMessage()" title="Send message">
+                    </button>
+                    <input type="file" id="fileInput" hidden multiple accept="image/*,.pdf,.txt">
+                    
+                    <button class="action-btn send-btn" onclick="sendMessage()">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="22" y1="2" x2="11" y2="13"/>
-                            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                            <path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/>
                         </svg>
                     </button>
                 </div>
-                <div class="preview-container" id="previewContainer"></div>
+                <div class="file-preview" id="filePreview"></div>
             </div>
         </main>
     </div>
 
     <script>
-        let token = localStorage.getItem('token');
+        let token = null;
         let currentChatId = null;
         let messageHistory = [];
         let uploadedFiles = [];
-        let isGenerating = false;
-        let currentController = null;
 
-        // Initialize marked.js options
         marked.setOptions({
-            highlight: function(code, lang) {
-                return hljs.highlightAuto(code).value;
-            },
+            highlight: (code, lang) => hljs.highlightAuto(code).value,
             breaks: true
         });
 
-        // Initialize the app
-        async function initialize() {
-            if (!token) {
-                showLoginModal();
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/verify', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (!response.ok) {
-                    showLoginModal();
-                    return;
-                }
-
-                hideLoginModal();
-                await loadChats();
-                await startNewChat();
-                setupEventListeners();
-            } catch (error) {
-                console.error('Initialization failed:', error);
-                showLoginModal();
-            }
-        }
-
-        // Event Listeners Setup
-        function setupEventListeners() {
-            const messageInput = document.getElementById('messageInput');
-            const fileUpload = document.getElementById('fileUpload');
-
-            messageInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                    e.preventDefault();
-                    sendMessage();
-                }
-            });
-
-            fileUpload.addEventListener('change', handleFileUpload);
-        }
-
-        // Auto-resize textarea
-        function autoResizeTextarea(textarea) {
-            textarea.style.height = 'auto';
-            textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
-        }
-
-        // Authentication
+        // Auth & Initialization
         async function login() {
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
@@ -559,309 +421,19 @@
                     const data = await response.json();
                     token = data.token;
                     localStorage.setItem('token', token);
-                    hideLoginModal();
-                    await initialize();
-                    showToast('Login successful', 'success');
-                } else {
-                    showToast('Invalid credentials', 'error');
+                    document.getElementById('loginScreen').style.display = 'none';
+                    document.getElementById('app').style.display = 'grid';
+                    initializeApp();
                 }
             } catch (error) {
                 console.error('Login failed:', error);
-                showToast('Login failed', 'error');
             }
         }
 
-        // File Handling
-        async function handleFileUpload(event) {
-            const files = event.target.files;
-            if (!files.length) return;
-
-            const formData = new FormData();
-            for (let file of files) {
-                formData.append('files', file);
-            }
-
+        async function initializeApp() {
             try {
-                const response = await fetch('/api/upload', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    body: formData
-                });
-
-                if (response.ok) {
-                    const uploadedData = await response.json();
-                    uploadedFiles = uploadedFiles.concat(uploadedData);
-                    updateFilePreview();
-                    showToast('Files uploaded successfully', 'success');
-                }
-            } catch (error) {
-                console.error('File upload failed:', error);
-                showToast('File upload failed', 'error');
-            }
-        }
-
-        function updateFilePreview() {
-            const container = document.getElementById('previewContainer');
-            container.innerHTML = '';
-
-            uploadedFiles.forEach((file, index) => {
-                if (file.type === 'image') {
-                    const preview = document.createElement('div');
-                    preview.className = 'preview-item';
-                    preview.innerHTML = `
-                        <img src="${file.base64}" alt="Preview" />
-                        <button class="remove-preview" onclick="removeFile(${index})">×</button>
-                    `;
-                    container.appendChild(preview);
-                }
-            });
-        }
-
-        function removeFile(index) {
-            uploadedFiles.splice(index, 1);
-            updateFilePreview();
-        }
-
-        // Message Handling
-        async function sendMessage() {
-            if (isGenerating) return;
-
-            const messageInput = document.getElementById('messageInput');
-            const message = messageInput.value.trim();
-            
-            if (!message && !uploadedFiles.length) return;
-
-            isGenerating = true;
-
-            try {
-                const controller = new AbortController();
-                currentController = controller;
-
-                const response = await fetch('/api/chat/stream', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        chatId: currentChatId,
-                        message,
-                        files: uploadedFiles,
-                        model: document.getElementById('modelSelector').value,
-                        history: messageHistory
-                    }),
-                    signal: controller.signal
-                });
-
-                appendMessage(message, true);
-                messageInput.value = '';
-                messageInput.style.height = 'auto';
-                uploadedFiles = [];
-                updateFilePreview();
-
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let currentMessage = '';
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    const chunk = decoder.decode(value);
-                    const lines = chunk.split('\n');
-
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            const data = JSON.parse(line.slice(5));
-                            currentMessage += data.content;
-                            updateLastMessage(currentMessage);
-                        }
-                    }
-                }
-
-                messageHistory.push(
-                    { role: 'user', content: message },
-                    { role: 'assistant', content: currentMessage }
-                );
-
-            } catch (error) {
-                if (error.name === 'AbortError') {
-                    showToast('Message generation stopped', 'success');
-                } else {
-                    console.error('Message sending failed:', error);
-                    showToast('Failed to send message', 'error');
-                }
-            } finally {
-                isGenerating = false;
-                currentController = null;
-            }
-        }
-
-        function appendMessage(content, isUser) {
-            const messages = document.getElementById('chatMessages');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
-
-            if (isUser) {
-                if (uploadedFiles.length) {
-                    const filesHtml = uploadedFiles.map(file => {
-                        if (file.type === 'image') {
-                            return `<img src="${file.base64}" alt="Uploaded image" style="max-width: 200px; border-radius: 0.5rem; margin: 0.5rem 0;">`;
-                        }
-                        return `<div>[File: ${file.name}]</div>`;
-                    }).join('');
-                    messageDiv.innerHTML = filesHtml + content;
-                } else {
-                    messageDiv.textContent = content;
-                }
-            } else {
-                messageDiv.innerHTML = marked.parse(content);
-                messageDiv.querySelectorAll('pre code').forEach(block => {
-                    hljs.highlightBlock(block);
-                });
-            }
-
-            messages.appendChild(messageDiv);
-            messages.scrollTop = messages.scrollHeight;
-        }
-
-        function updateLastMessage(content) {
-            const messages = document.getElementById('chatMessages');
-            const lastMessage = messages.lastElementChild;
-            if (lastMessage && lastMessage.classList.contains('assistant')) {
-                lastMessage.innerHTML = marked.parse(content);
-                lastMessage.querySelectorAll('pre code').forEach(block => {
-                    hljs.highlightBlock(block);
-                });
-            } else {
-                appendMessage(content, false);
-            }
-        }
-
-        // Chat Management
-        async function loadChats() {
-            try {
-                const response = await fetch('/api/chats', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const chats = await response.json();
-                
-                const chatList = document.getElementById('chatList');
-                chatList.innerHTML = '';
-                
-                chats.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-                     .forEach(chat => {
-                    const chatItem = document.createElement('div');
-                    chatItem.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
-                    
-                    const title = chat.messages && chat.messages.length > 0 
-                        ? chat.messages[0].content.substring(0, 30) + (chat.messages[0].content.length > 30 ? '...' : '')
-                        : 'New Chat';
-                    
-                    chatItem.innerHTML = `
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                        </svg>
-                        <span>${title}</span>
-                    `;
-                    
-                    chatItem.onclick = () => loadChat(chat.id);
-                    chatList.appendChild(chatItem);
-                });
-            } catch (error) {
-                console.error('Failed to load chats:', error);
-                showToast('Failed to load chats', 'error');
-            }
-        }
-
-        async function startNewChat() {
-            try {
-                const response = await fetch('/api/chats', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                const chat = await response.json();
-                currentChatId = chat.id;
-                messageHistory = [];
-                document.getElementById('chatMessages').innerHTML = '';
                 await loadChats();
+                await startNewChat();
+                setupEventListeners();
             } catch (error) {
-                console.error('Failed to start new chat:', error);
-                showToast('Failed to create new chat', 'error');
-            }
-        }
-
-        async function loadChat(chatId) {
-            try {
-                const response = await fetch(`/api/chats/${chatId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const chat = await response.json();
-                
-                currentChatId = chatId;
-                messageHistory = chat.messages;
-                
-                const chatMessages = document.getElementById('chatMessages');
-                chatMessages.innerHTML = '';
-                
-                chat.messages.forEach(message => {
-                    appendMessage(message.content, message.role === 'user');
-                });
-                
-                await loadChats();
-            } catch (error) {
-                console.error('Failed to load chat:', error);
-                showToast('Failed to load chat', 'error');
-            }
-        }
-
-        // UI Helpers
-        function showLoginModal() {
-            document.getElementById('loginModal').style.display = 'flex';
-        }
-
-        function hideLoginModal() {
-            document.getElementById('loginModal').style.display = 'none';
-        }
-
-        function showToast(message, type = 'info') {
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            toast.textContent = message;
-            document.body.appendChild(toast);
-
-            setTimeout(() => {
-                toast.remove();
-            }, 3000);
-        }
-
-        // Initialize the app
-        initialize();
-    </script>
-</body>
-</html>="modal-logo">Expansion AI</div>
-            <input type="text" id="username" placeholder="Username" />
-            <input type="password" id="password" placeholder="Password" />
-            <button onclick="login()">Login</button>
-        </div>
-    </div>
-
-    <!-- Main Chat Interface -->
-    <div class="app-container">
-        <aside class="sidebar">
-            <div class="logo">Expansion AI</div>
-            <button class="new-chat-btn" onclick="startNewChat()">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                </svg>
-                New Chat
-            </button>
-            <div class="chat-list" id="chatList"></div>
-        </aside>
-
-        <main class="main-content">
-            <div class
+                console.error('
