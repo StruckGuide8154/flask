@@ -995,14 +995,15 @@ async function sendMessage() {
             if (!newChat) return;
         }
 
-        const messageContent = {
-            text: message,
-            files: uploadedFiles
-        };
-
         appendMessage(message, true, null, uploadedFiles);
         input.value = '';
         input.style.height = 'auto';
+
+        // Format the message history correctly
+        const formattedHistory = messageHistory.map(msg => ({
+            role: msg.role === 'user' ? 'user' : 'assistant',
+            content: typeof msg.content === 'object' ? msg.content.text : msg.content
+        }));
 
         const response = await fetch('/api/chat/stream', {
             method: 'POST',
@@ -1015,11 +1016,16 @@ async function sendMessage() {
                 message: message,
                 files: uploadedFiles,
                 model: document.getElementById('modelSelect').value,
-                history: messageHistory
+                history: formattedHistory,
+                system: "You are an AI assistant that helps with text and images. Provide clear, helpful responses."
             })
         });
 
-        if (!response.ok) throw new Error('Failed to send message');
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Server error:', errorText);
+            throw new Error('Failed to send message');
+        }
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -1049,36 +1055,43 @@ async function sendMessage() {
                         }
                     } catch (e) {
                         console.error('Error parsing stream:', e);
+                        console.log('Problematic line:', line);
                     }
                 }
             }
         }
 
-        // Update message history
+        // Store message in history with proper format
         messageHistory.push(
-            { role: 'user', content: messageContent },
-            { role: 'assistant', content: currentResponse, cost: messageCost }
+            { 
+                role: 'user', 
+                content: uploadedFiles.length ? {
+                    text: message,
+                    files: uploadedFiles
+                } : message
+            },
+            { 
+                role: 'assistant', 
+                content: currentResponse,
+                cost: messageCost 
+            }
         );
 
-        // Update chat in backend
-        try {
-            await fetch(`/api/chats/${currentChatId}`, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    messages: messageHistory
-                })
-            });
-        } catch (error) {
-            console.error('Failed to update chat history:', error);
-        }
+        // Save chat to backend
+        await fetch(`/api/chats/${currentChatId}`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messages: messageHistory
+            })
+        });
 
         uploadedFiles = [];
         updateFilePreview();
-        await loadChats(); // Refresh chat list
+        await loadChats();
 
     } catch (error) {
         console.error('Failed to send message:', error);
