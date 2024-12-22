@@ -476,6 +476,7 @@
                             <span>${title}${title.length > 30 ? '...' : ''}</span>
                         `;
                         
+                        item.dataset.chatId = chat.id;
                         item.onclick = () => loadChat(chat.id);
                         chatList.appendChild(item);
                     });
@@ -508,13 +509,18 @@
 
         async function loadChat(chatId) {
             try {
-                const response = await fetch(`/api/chats/${chatId}`, {
+                // First, find the chat in the existing chats list
+                const response = await fetch('/api/chats', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
-                if (!response.ok) throw new Error('Failed to load chat');
+                if (!response.ok) throw new Error('Failed to load chats');
                 
-                const chat = await response.json();
+                const chats = await response.json();
+                const chat = chats.find(c => c.id === chatId);
+                
+                if (!chat) throw new Error('Chat not found');
+                
                 currentChatId = chatId;
                 messageHistory = chat.messages || [];
                 
@@ -527,7 +533,13 @@
                     });
                 }
                 
-                await loadChats();
+                // Update chat list UI
+                document.querySelectorAll('.chat-item').forEach(item => {
+                    item.classList.remove('active');
+                    if (item.dataset.chatId === chatId) {
+                        item.classList.add('active');
+                    }
+                });
             } catch (error) {
                 console.error('Failed to load chat:', error);
             }
@@ -710,4 +722,3 @@ Always format responses appropriately using markdown and code blocks.`;
         };
     </script>
 </body>
-</html>
