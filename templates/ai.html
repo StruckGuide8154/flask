@@ -605,19 +605,26 @@
                 const chat = await response.json();
                 currentChatId = chat.id;
                 messageHistory = [];
-                document.getElementById('messages').innerHTML = `
-                    <div class="empty-state">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                        </svg>
-                        <h3>Start a New Conversation</h3>
-                        <p>Type a message below to begin chatting</p>
-                    </div>
-                `;
+                
+                const messagesContainer = document.getElementById('messages');
+                if (messagesContainer) {
+                    messagesContainer.innerHTML = `
+                        <div class="empty-state">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            <h3>Start a New Conversation</h3>
+                            <p>Type a message below to begin chatting</p>
+                        </div>
+                    `;
+                }
+                
                 await loadChats();
+                return chat;
             } catch (error) {
                 console.error('Failed to start new chat:', error);
                 alert('Failed to create new chat. Please try again.');
+                throw error;
             }
         }
 
@@ -747,12 +754,16 @@
         // Message Handling
         async function sendMessage() {
             const input = document.getElementById('messageInput');
-            const message = input.value.trim();
+            if (!input) return;
             
+            const message = input.value.trim();
             if (!message && !uploadedFiles.length) return;
-            if (!currentChatId) {
-                await startNewChat();
-            }
+            
+            try {
+                if (!currentChatId) {
+                    const newChat = await startNewChat();
+                    if (!newChat) return;
+                }
 
             try {
                 appendMessage(message, true);
@@ -828,6 +839,7 @@
 
         function appendMessage(content, isUser) {
             const messages = document.getElementById('messages');
+            if (!messages) return;
             
             // Remove empty state if present
             const emptyState = messages.querySelector('.empty-state');
@@ -870,7 +882,13 @@
             }
 
             messageContent.appendChild(messageDiv);
-            messageGroup.appendChild(isUser ? [messageContent, avatar] : [avatar, messageContent]);
+            if (isUser) {
+                messageGroup.appendChild(messageContent);
+                messageGroup.appendChild(avatar);
+            } else {
+                messageGroup.appendChild(avatar);
+                messageGroup.appendChild(messageContent);
+            }
             messages.appendChild(messageGroup);
             messages.scrollTop = messages.scrollHeight;
         }
@@ -925,4 +943,12 @@
         };
     </script>
 </body>
-</html>
+</html><div class="messages" id="messages">
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <h3>No messages yet</h3>
+                    <p>Start a new conversation or select an existing chat from the sidebar</p>
+                </div>
+            </div>
