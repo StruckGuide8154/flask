@@ -517,35 +517,86 @@
         </main>
     </div>
 
-    <script>
-// Global state
-// Global state
+    <script>// Global state
 let token = null;
 let currentChatId = null;
 let messageHistory = [];
 let uploadedFiles = [];
 let user = null;
 
-// Configure markdown
-marked.setOptions({
-    highlight: (code, lang) => hljs.highlightAuto(code).value,
-    breaks: true
-});
+// Model configurations
+const MODELS = {
+    'claude-3-opus-latest': {
+        name: 'Claude 3 Opus',
+        description: 'Most capable Claude model for complex tasks',
+        supportsVision: true,
+        contextWindow: 200000
+    },
+    'claude-3-sonnet-latest': {
+        name: 'Claude 3 Sonnet',
+        description: 'Fast and capable for most tasks',
+        supportsVision: true,
+        contextWindow: 128000
+    },
+    'claude-3-haiku-latest': {
+        name: 'Claude 3 Haiku',
+        description: 'Fastest Claude model for simple tasks',
+        supportsVision: true,
+        contextWindow: 128000
+    },
+    'gpt4o': {
+        name: 'GPT-4 Opus',
+        description: 'High-intelligence flagship model',
+        supportsVision: false,
+        contextWindow: 128000
+    },
+    'gpt4o-mini': {
+        name: 'GPT-4 Opus Mini',
+        description: 'Fast, affordable model for focused tasks',
+        supportsVision: false,
+        contextWindow: 128000
+    },
+    'o1': {
+        name: 'O1 Reasoning',
+        description: 'Advanced reasoning for complex tasks (slower)',
+        supportsVision: false,
+        contextWindow: 128000
+    },
+    'o1-mini': {
+        name: 'O1 Mini Reasoning',
+        description: 'Lighter reasoning model (slower)',
+        supportsVision: false,
+        contextWindow: 128000
+    }
+};
 
 // Initialize event listeners
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
+    initializeModelSelect();
     checkSavedToken();
 });
+
+// Setup model selector
+function initializeModelSelect() {
+    const modelSelect = document.getElementById('modelSelect');
+    if (!modelSelect) return;
+
+    modelSelect.innerHTML = '';
+    Object.entries(MODELS).forEach(([id, model]) => {
+        const option = document.createElement('option');
+        option.value = id;
+        option.textContent = model.name;
+        option.title = model.description;
+        modelSelect.appendChild(option);
+    });
+}
 
 function setupEventListeners() {
     // Login handling
     document.getElementById('loginBtn')?.addEventListener('click', login);
     document.getElementById('password')?.addEventListener('keydown', e => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            login();
-        }
+        if (e.key === 'Enter') login();
     });
 
     // Chat interface
@@ -554,11 +605,9 @@ function setupEventListeners() {
         document.getElementById('fileInput').click();
     });
     document.getElementById('sendBtn')?.addEventListener('click', sendMessage);
-
-    // File handling
     document.getElementById('fileInput')?.addEventListener('change', handleFileUpload);
 
-    // Message input
+    // Message input auto-resize
     const messageInput = document.getElementById('messageInput');
     if (messageInput) {
         messageInput.addEventListener('input', () => {
@@ -572,25 +621,8 @@ function setupEventListeners() {
             }
         });
     }
-
-    // Logout shortcut
-    document.addEventListener('keydown', e => {
-        if (e.key === 'l' && (e.metaKey || e.ctrlKey)) {
-            e.preventDefault();
-            logout();
-        }
-    });
 }
 
-function checkSavedToken() {
-    const savedToken = localStorage.getItem('token');
-    if (savedToken) {
-        token = savedToken;
-        verifyAndInitialize();
-    }
-}
-
-// Auth functions
 async function login() {
     try {
         const username = document.getElementById('username').value;
@@ -624,91 +656,9 @@ async function login() {
     }
 }
 
-async function verifyAndInitialize() {
-    try {
-        const response = await fetch('/api/verify', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (response.ok) {
-            showApp();
-            await initializeApp();
-        } else {
-            throw new Error('Invalid token');
-        }
-    } catch (error) {
-        console.error('Verification error:', error);
-        logout();
-    }
-}
-
 function showApp() {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = 'grid';
-}
-
-function logout() {
-    localStorage.removeItem('token');
-    window.location.reload();
-}
-
-function updateCreditsDisplay(credits) {
-    const display = document.getElementById('creditsAmount');
-    if (display) {
-        display.textContent = (credits || 0).toFixed(2);
-    }
-}
-
-// App initialization
-async function initializeApp() {
-    try {
-        await loadChats();
-        if (currentChatId) {
-            await loadChat(currentChatId);
-        }
-    } catch (error) {
-        console.error('Initialization error:', error);
-        alert('Failed to initialize the application. Please try refreshing the page.');
-    }
-}
-
-// Chat management
-async function loadChats() {
-    try {
-        const response = await fetch('/api/chats', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (!response.ok) throw new Error('Failed to load chats');
-        
-        const chats = await response.json();
-        const chatList = document.getElementById('chatList');
-        if (!chatList) return;
-        
-        chatList.innerHTML = '';
-        
-        chats.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-             .forEach(chat => {
-                const item = document.createElement('div');
-                item.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
-                
-                const title = chat.messages?.[0]?.content?.text || chat.messages?.[0]?.content || 'New Chat';
-                const displayTitle = title.substring(0, 25) + (title.length > 25 ? '...' : '');
-                
-                item.innerHTML = `
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                    </svg>
-                    <span>${displayTitle}</span>
-                `;
-                
-                item.dataset.chatId = chat.id;
-                item.addEventListener('click', () => loadChat(chat.id));
-                chatList.appendChild(item);
-             });
-    } catch (error) {
-        console.error('Failed to load chats:', error);
-    }
 }
 
 async function startNewChat() {
@@ -737,22 +687,7 @@ async function startNewChat() {
     }
 }
 
-function showEmptyState() {
-    const messagesContainer = document.getElementById('messages');
-    if (messagesContainer) {
-        messagesContainer.innerHTML = `
-            <div class="empty-state">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
-                <h3>Start a New Conversation</h3>
-                <p>Type a message below to begin chatting</p>
-            </div>
-        `;
-    }
-}
-
-async function loadChat(chatId) {
+async function loadChats() {
     try {
         const response = await fetch('/api/chats', {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -761,48 +696,40 @@ async function loadChat(chatId) {
         if (!response.ok) throw new Error('Failed to load chats');
         
         const chats = await response.json();
-        const chat = chats.find(c => c.id === chatId);
+        const chatList = document.getElementById('chatList');
+        if (!chatList) return;
         
-        if (!chat) throw new Error('Chat not found');
+        chatList.innerHTML = '';
         
-        currentChatId = chatId;
-        messageHistory = chat.messages || [];
-        
-        const messagesContainer = document.getElementById('messages');
-        if (!messagesContainer) return;
-        
-        messagesContainer.innerHTML = '';
-        
-        if (messageHistory.length) {
-            messageHistory.forEach(msg => {
-                if (typeof msg.content === 'object') {
-                    appendMessage(msg.content.text || '', msg.role === 'user', msg.cost, msg.content.files);
-                } else {
-                    appendMessage(msg.content, msg.role === 'user', msg.cost);
-                }
-            });
-        } else {
-            showEmptyState();
-        }
-        
-        updateActiveChatSelection(chatId);
+        chats.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+             .forEach(chat => {
+                const item = document.createElement('div');
+                item.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
+                
+                const title = chat.messages?.[0]?.content?.text || 'New Chat';
+                const displayTitle = title.substring(0, 25) + (title.length > 25 ? '...' : '');
+                
+                item.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <span>${displayTitle}</span>
+                `;
+                
+                item.dataset.chatId = chat.id;
+                item.addEventListener('click', () => loadChat(chat.id));
+                chatList.appendChild(item);
+             });
     } catch (error) {
-        console.error('Failed to load chat:', error);
+        console.error('Failed to load chats:', error);
     }
 }
 
-function updateActiveChatSelection(chatId) {
-    document.querySelectorAll('.chat-item').forEach(item => {
-        item.classList.toggle('active', item.dataset.chatId === chatId);
-    });
-}
-
-// File handling
 async function handleFileUpload(event) {
     const files = event.target.files;
     if (!files.length) return;
 
-    const maxSize = 5 * 1024 * 1024; // 5MB limit
+    const maxSize = 20 * 1024 * 1024; // 20MB limit
     const formData = new FormData();
     let oversizedFiles = [];
 
@@ -815,7 +742,7 @@ async function handleFileUpload(event) {
     }
 
     if (oversizedFiles.length) {
-        alert(`Some files exceed the 5MB limit: ${oversizedFiles.join(', ')}`);
+        alert(`Some files exceed the 20MB limit: ${oversizedFiles.join(', ')}`);
     }
 
     try {
@@ -838,11 +765,133 @@ async function handleFileUpload(event) {
     event.target.value = '';
 }
 
+async function sendMessage() {
+    const input = document.getElementById('messageInput');
+    if (!input) return;
+    
+    const message = input.value.trim();
+    const selectedModel = document.getElementById('modelSelect').value;
+    
+    if (!message && !uploadedFiles.length) return;
+
+    try {
+        if (!currentChatId) {
+            const newChat = await startNewChat();
+            if (!newChat) return;
+        }
+
+        // Add user message to UI
+        appendMessage(message, true, null, uploadedFiles);
+        input.value = '';
+        input.style.height = 'auto';
+
+        // Format message history
+        const formattedHistory = messageHistory.map(msg => ({
+            role: msg.role === 'user' ? 'user' : 'assistant',
+            content: typeof msg.content === 'object' ? msg.content.text : msg.content
+        }));
+
+        // Stream the response
+        const response = await fetch('/api/chat/stream', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                chatId: currentChatId,
+                message: message,
+                files: uploadedFiles,
+                model: selectedModel,
+                history: formattedHistory,
+                system: "You are a helpful AI assistant that provides clear and accurate responses."
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Server error:', errorText);
+            throw new Error('Failed to send message');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let currentResponse = '';
+        let messageCost = null;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(5));
+                        if (data.type === 'cost') {
+                            messageCost = data.cost;
+                            if (user?.credits !== undefined) {
+                                user.credits -= data.cost;
+                                updateCreditsDisplay(user.credits);
+                            }
+                        } else if (data.content) {
+                            currentResponse += data.content;
+                            updateLastMessage(currentResponse, messageCost);
+                        }
+                    } catch (e) {
+                        console.error('Error parsing stream:', e);
+                    }
+                }
+            }
+        }
+
+        // Store message in history
+        messageHistory.push(
+            { 
+                role: 'user', 
+                content: uploadedFiles.length ? {
+                    text: message,
+                    files: uploadedFiles
+                } : message
+            },
+            { 
+                role: 'assistant', 
+                content: currentResponse,
+                cost: messageCost 
+            }
+        );
+
+        // Save chat
+        await fetch(`/api/chats/${currentChatId}`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messages: messageHistory
+            })
+        });
+
+        // Reset files and update UI
+        uploadedFiles = [];
+        updateFilePreview();
+        await loadChats();
+
+    } catch (error) {
+        console.error('Failed to send message:', error);
+        alert('Failed to send message. Please try again.');
+    }
+}
+
+// Helper functions for UI updates
 function updateFilePreview() {
     const preview = document.getElementById('filePreview');
     if (!preview) return;
+    
     preview.innerHTML = '';
-
     uploadedFiles.forEach((file, index) => {
         const item = document.createElement('div');
         item.className = 'preview-item';
@@ -873,7 +922,28 @@ function removeFile(index) {
     updateFilePreview();
 }
 
-// Message handling
+function updateCreditsDisplay(credits) {
+    const display = document.getElementById('creditsAmount');
+    if (display) {
+        display.textContent = (credits || 0).toFixed(2);
+    }
+}
+
+function showEmptyState() {
+    const messagesContainer = document.getElementById('messages');
+    if (messagesContainer) {
+        messagesContainer.innerHTML = `
+            <div class="empty-state">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                <h3>Start a New Conversation</h3>
+                <p>Type a message below to begin chatting</p>
+            </div>
+        `;
+    }
+}
+
 function appendMessage(content, isUser, cost = null, files = []) {
     const messages = document.getElementById('messages');
     if (!messages) return;
@@ -982,122 +1052,42 @@ function updateLastMessage(content, cost = null) {
     }
 }
 
-async function sendMessage() {
-    const input = document.getElementById('messageInput');
-    if (!input) return;
-    
-    const message = input.value.trim();
-    if (!message && !uploadedFiles.length) return;
-    
+// Additional utility functions for tokens and costs
+function estimateTokenCount(text) {
+    // Rough estimation: ~4 chars per token
+    return Math.ceil(text.length / 4);
+}
+
+function getModelContextWindow(modelId) {
+    return MODELS[modelId]?.contextWindow || 128000;
+}
+
+function pruneHistory(history, modelId) {
+    const contextWindow = getModelContextWindow(modelId);
+    let totalTokens = 0;
+    return history.filter(msg => {
+        const tokens = estimateTokenCount(typeof msg.content === 'string' ? msg.content : msg.content.text);
+        totalTokens += tokens;
+        return totalTokens <= contextWindow;
+    });
+}
+
+// Initialize the app
+async function initializeApp() {
     try {
-        if (!currentChatId) {
-            const newChat = await startNewChat();
-            if (!newChat) return;
-        }
-
-        appendMessage(message, true, null, uploadedFiles);
-        input.value = '';
-        input.style.height = 'auto';
-
-        // Format the message history correctly
-        const formattedHistory = messageHistory.map(msg => ({
-            role: msg.role === 'user' ? 'user' : 'assistant',
-            content: typeof msg.content === 'object' ? msg.content.text : msg.content
-        }));
-
-        const response = await fetch('/api/chat/stream', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                chatId: currentChatId,
-                message: message,
-                files: uploadedFiles,
-                model: document.getElementById('modelSelect').value,
-                history: formattedHistory,
-                system: "You are an AI assistant that helps with text and images. Provide clear, helpful responses."
-            })
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Server error:', errorText);
-            throw new Error('Failed to send message');
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let currentResponse = '';
-        let messageCost = null;
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            const chunk = decoder.decode(value);
-            const lines = chunk.split('\n');
-
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    try {
-                        const data = JSON.parse(line.slice(5));
-                        if (data.type === 'cost') {
-                            messageCost = data.cost;
-                            if (user?.credits !== undefined) {
-                                user.credits -= data.cost;
-                                updateCreditsDisplay(user.credits);
-                            }
-                        } else if (data.content) {
-                            currentResponse += data.content;
-                            updateLastMessage(currentResponse, messageCost);
-                        }
-                    } catch (e) {
-                        console.error('Error parsing stream:', e);
-                        console.log('Problematic line:', line);
-                    }
-                }
-            }
-        }
-
-        // Store message in history with proper format
-        messageHistory.push(
-            { 
-                role: 'user', 
-                content: uploadedFiles.length ? {
-                    text: message,
-                    files: uploadedFiles
-                } : message
-            },
-            { 
-                role: 'assistant', 
-                content: currentResponse,
-                cost: messageCost 
-            }
-        );
-
-        // Save chat to backend
-        await fetch(`/api/chats/${currentChatId}`, {
-            method: 'PUT',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                messages: messageHistory
-            })
-        });
-
-        uploadedFiles = [];
-        updateFilePreview();
         await loadChats();
-
+        if (currentChatId) {
+            await loadChat(currentChatId);
+        }
     } catch (error) {
-        console.error('Failed to send message:', error);
-        alert('Failed to send message. Please try again.');
+        console.error('Initialization error:', error);
+        alert('Failed to initialize the application. Please try refreshing the page.');
     }
 }
+
+// Export key functions for global access
+window.removeFile = removeFile;
+window.sendMessage = sendMessage;
     </script>
 </body>
 </html>
