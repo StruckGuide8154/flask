@@ -330,31 +330,79 @@ async def stream_gpt(messages: List[dict], model: str):
                     continue
 
 async def stream_claude(messages: List[dict], model: str):
+    formatted_messages = []
+    for msg in messages:
+        # Convert the OpenAI format to Claude format
+        content = msg["content"]
+        if isinstance(content, list):  # Handle multimodal messages
+            formatted_content = []
+            for item in content:
+                if item.get("type") == "image_url":
+                    formatted_content.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/jpeg",
+                            "data": item["image_url"]["url"].split(",")[1]  # Remove data:image/jpeg;base64,
+                        }
+                    })
+                else:
+                    formatted_content.append({
+                        "type": "text",
+                        "text": item.get("text", "")
+                    })
+            content = formatted_content
+        else:
+            content = [{"type": "text", "text": content}]
+
+        formatted_messages.append({
+            "role": "user" if msg["role"] == "user" else "assistant",
+            "content": content
+        })
+
     async with httpx.AsyncClient() as client:
         response = await client.post(
             "https://api.anthropic.com/v1/messages",
             headers={
                 "x-api-key": os.getenv('secretant'),
                 "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json"
+                "content-type": "application/json"
             },
             json={
-                "model": model,
-                "messages": messages,
-                "stream": True
+                "model": CLAUDE_MODELS[model],
+                "messages": formatted_messages,
+                "stream": True,
+                "max_tokens": 4096
             },
             timeout=None
         )
         
         async for line in response.aiter_lines():
             if line.startswith('data: '):
+                if line.strip() == 'data: [DONE]':
+                    break
                 try:
                     chunk = json.loads(line[6:])
-                    content = chunk.get('delta', {}).get('text', '')
-                    if content:
-                        yield f"data: {json.dumps({'content': content})}\n\n"
+                    if chunk["type"] == "message_delta":
+                        text = None
+                        if chunk.get("delta", {}).get("text"):
+                            text = chunk["delta"]["text"]
+                        elif chunk.get("delta", {}).get("content"):
+                            for content in chunk["delta"]["content"]:
+                                if content["type"] == "text":
+                                    text = content["text"]
+                                    break
+                        if text:
+                            yield f"data: {json.dumps({'content': text})}\n\n"
                 except json.JSONDecodeError:
                     continue
+
+# Update CLAUDE_MODELS dictionary
+CLAUDE_MODELS = {
+    "claude-opus": "claude-3-opus-20240229",
+    "claude-sonnet": "claude-3-5-sonnet-20241022",
+    "claude-haiku": "claude-3-5-haiku-20241022"
+}
 
 @app.post("/api/chat/stream")
 async def stream_chat(
