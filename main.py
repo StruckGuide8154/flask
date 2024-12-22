@@ -330,40 +330,6 @@ async def stream_gpt(messages: List[dict], model: str):
                     continue
 
 async def stream_claude(messages: List[dict], model: str):
-    formatted_messages = []
-    for msg in messages:
-        content = msg["content"]
-        # Simple text message
-        if isinstance(content, str):
-            formatted_messages.append({
-                "role": "user" if msg["role"] == "user" else "assistant",
-                "content": content
-            })
-        # Multimodal message
-        elif isinstance(content, list):
-            formatted_content = []
-            for item in content:
-                if item.get("type") == "image_url":
-                    # Extract base64 data from data URL
-                    base64_data = item["image_url"]["url"].split(",")[1]
-                    formatted_content.append({
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/jpeg",
-                            "data": base64_data
-                        }
-                    })
-                else:
-                    formatted_content.append({
-                        "type": "text",
-                        "text": item.get("text", "")
-                    })
-            formatted_messages.append({
-                "role": "user" if msg["role"] == "user" else "assistant",
-                "content": formatted_content
-            })
-
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -371,51 +337,70 @@ async def stream_claude(messages: List[dict], model: str):
                 headers={
                     "x-api-key": os.getenv('secretant'),
                     "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                    "accept": "text/event-stream"
+                    "content-type": "application/json"
                 },
                 json={
                     "model": CLAUDE_MODELS[model],
-                    "messages": formatted_messages,
-                    "stream": True,
-                    "max_tokens": 4096
+                    "messages": messages,
+                    "max_tokens": 4096,
+                    "stream": True
                 },
                 timeout=None
             )
 
             if response.status_code != 200:
-                error_detail = await response.json()
-                logger.error(f"Claude API error: {error_detail}")
-                raise HTTPException(status_code=response.status_code, detail=str(error_detail))
+                logger.error(f"Claude API error: {response.status_code}")
+                logger.error(f"Response: {await response.text()}")
+                raise HTTPException(status_code=response.status_code)
 
-            # Process the streaming response
             buffer = ""
-            async for chunk in response.aiter_bytes():
-                buffer += chunk.decode()
-                
-                while "\n\n" in buffer:
-                    line, buffer = buffer.split("\n\n", 1)
-                    if line.startswith("data: "):
-                        try:
-                            data = json.loads(line[6:])
-                            if data["type"] == "content_block_delta":
-                                text = data.get("delta", {}).get("text", "")
+            async for line in response.aiter_lines():
+                if not line:
+                    continue
+
+                if line.startswith("event: "):
+                    event_type = line[7:].strip()
+                    continue
+
+                if line.startswith("data: "):
+                    try:
+                        data = json.loads(line[6:])
+                        
+                        # Handle different event types
+                        if data["type"] == "message_start":
+                            continue
+                        elif data["type"] == "content_block_start":
+                            continue
+                        elif data["type"] == "content_block_delta":
+                            if "delta" in data and data["delta"]["type"] == "text_delta":
+                                text = data["delta"]["text"]
                                 if text:
                                     yield f"data: {json.dumps({'content': text})}\n\n"
-                            elif data["type"] == "message_stop":
-                                break
-                        except json.JSONDecodeError as e:
-                            logger.error(f"JSON decode error: {e}")
+                        elif data["type"] == "content_block_stop":
                             continue
+                        elif data["type"] == "message_delta":
+                            continue
+                        elif data["type"] == "message_stop":
+                            break
+                        elif data["type"] == "error":
+                            logger.error(f"Claude streaming error: {data}")
+                            raise HTTPException(status_code=500, detail=data["error"])
+                        elif data["type"] == "ping":
+                            continue
+
+                    except json.JSONDecodeError as e:
+                        logger.error(f"JSON decode error: {e}, Line: {line}")
+                        continue
 
     except Exception as e:
         logger.error(f"Error in stream_claude: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 CLAUDE_MODELS = {
     "claude-opus": "claude-3-opus-20240229",
-    "claude-sonnet": "claude-3-sonnet-20240229",
-    "claude-haiku": "claude-3-haiku-20240307"
+    "claude-sonnet": "claude-3-5-sonnet-20241022",
+    "claude-haiku": "claude-3-5-haiku-20241022"
 }
 
 @app.post("/api/chat/stream")
@@ -429,50 +414,63 @@ async def stream_chat(
         if not user:
             raise HTTPException(status_code=401, detail="Invalid user")
 
-        # Format messages
+        # Format messages for Claude's API
         formatted_messages = []
         for msg in request.get("history", []):
-            content = msg["content"]
-            # Handle files/images
-            if isinstance(content, dict) and content.get("files"):
-                files_content = []
-                for file in content["files"]:
+            if isinstance(msg["content"], dict) and "files" in msg["content"]:
+                # Handle messages with files
+                content = []
+                for file in msg["content"]["files"]:
                     if file["type"] == "image":
-                        files_content.append({
-                            "type": "image_url",
-                            "image_url": {"url": file["base64"]}
+                        content.append({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/jpeg",
+                                "data": file["base64"].split(",")[1]
+                            }
                         })
-                files_content.append({
+                content.append({
                     "type": "text",
-                    "text": content["text"]
+                    "text": msg["content"]["text"]
                 })
-                formatted_messages.append({
-                    "role": msg["role"],
-                    "content": files_content
-                })
-            else:
                 formatted_messages.append({
                     "role": msg["role"],
                     "content": content
                 })
+            else:
+                # Handle text-only messages
+                formatted_messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
 
         # Add current message
-        current_content = []
         if request.get("files"):
+            content = []
             for file in request["files"]:
                 if file["type"] == "image":
-                    current_content.append({
-                        "type": "image_url",
-                        "image_url": {"url": file["base64"]}
+                    content.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/jpeg",
+                            "data": file["base64"].split(",")[1]
+                        }
                     })
-        current_content.append({
-            "type": "text",
-            "text": request["message"]
-        })
-        formatted_messages.append({
-            "role": "user",
-            "content": current_content if len(current_content) > 1 else request["message"]
-        })
+            content.append({
+                "type": "text",
+                "text": request["message"]
+            })
+            formatted_messages.append({
+                "role": "user",
+                "content": content
+            })
+        else:
+            formatted_messages.append({
+                "role": "user",
+                "content": request["message"]
+            })
 
         # Stream based on model
         if request["model"].startswith("gpt"):
@@ -480,35 +478,8 @@ async def stream_chat(
         else:
             stream = stream_claude(formatted_messages, request["model"])
 
-        async def wrapped_stream():
-            complete_response = ""
-            async for chunk in stream:
-                complete_response += json.loads(chunk[6:])["content"]
-                yield chunk
-            
-            # Save to chat history
-            chat = next((c for c in get_user_chats(user["id"]) 
-                        if c["id"] == request["chatId"]), None)
-            if chat:
-                # Save user message
-                chat["messages"].append({
-                    "role": "user",
-                    "content": {
-                        "text": request["message"],
-                        "files": request.get("files", [])
-                    } if request.get("files") else request["message"],
-                    "timestamp": datetime.utcnow().isoformat()
-                })
-                # Save assistant message
-                chat["messages"].append({
-                    "role": "assistant",
-                    "content": complete_response,
-                    "timestamp": datetime.utcnow().isoformat()
-                })
-                save_chat(chat)
-
         return StreamingResponse(
-            wrapped_stream(),
+            stream,
             media_type="text/event-stream"
         )
 
