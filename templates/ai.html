@@ -12,21 +12,23 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tokyo-night-dark.min.css">
     <style>
         :root {
-            --black: #0a0a0c;
-            --gold: #ffd700;
-            --gold-glow: rgba(255, 215, 0, 0.15);
-            --gold-gradient: linear-gradient(135deg, #ffd700, #ffb347);
+            --black: #08080a;
+            --gold: #ffd70080;
+            --gold-bright: #ffd700;
+            --gold-glow: rgba(255, 215, 0, 0.08);
+            --gold-gradient: linear-gradient(135deg, rgba(255, 215, 0, 0.9), rgba(255, 179, 71, 0.9));
             --text: #e2e8f0;
             --text-dim: #94a3b8;
-            --bg-surface: rgba(20, 20, 25, 0.95);
-            --border: rgba(255, 215, 0, 0.1);
+            --bg-surface: rgba(8, 8, 10, 0.85);
+            --border: rgba(255, 215, 0, 0.08);
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
         }
 
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Plus Jakarta Sans', -apple-system, system-ui, sans-serif;
+            font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
         }
 
         body {
@@ -34,12 +36,17 @@
             color: var(--text);
             min-height: 100vh;
             line-height: 1.5;
+            background-image: 
+                radial-gradient(circle at 20% 20%, var(--gold-glow) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, var(--gold-glow) 0%, transparent 50%);
         }
 
         .app {
             display: grid;
-            grid-template-columns: 280px 1fr;
+            grid-template-columns: 240px 1fr;
             height: 100vh;
+            gap: 1px;
+            background: var(--border);
         }
 
         .login {
@@ -60,11 +67,12 @@
             width: 90%;
             max-width: 400px;
             backdrop-filter: blur(20px);
+            box-shadow: var(--shadow);
             animation: slideIn 0.3s ease;
         }
 
         .logo {
-            font-size: 2rem;
+            font-size: 1.75rem;
             font-weight: 600;
             text-align: center;
             margin-bottom: 2rem;
@@ -72,11 +80,12 @@
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             text-shadow: 0 0 30px var(--gold-glow);
+            letter-spacing: -0.02em;
         }
 
         .input {
             width: 100%;
-            padding: 1rem;
+            padding: 0.875rem 1rem;
             background: rgba(0, 0, 0, 0.2);
             border: 1px solid var(--border);
             border-radius: 0.75rem;
@@ -94,7 +103,7 @@
 
         .btn {
             width: 100%;
-            padding: 1rem;
+            padding: 0.875rem;
             border: none;
             border-radius: 0.75rem;
             font-weight: 500;
@@ -112,12 +121,12 @@
 
         .sidebar {
             background: var(--bg-surface);
-            border-right: 1px solid var(--border);
-            padding: 1.5rem;
+            padding: 1.25rem;
             display: flex;
             flex-direction: column;
             gap: 1.25rem;
             backdrop-filter: blur(20px);
+            border-right: 1px solid var(--border);
         }
 
         .chat-list {
@@ -126,10 +135,11 @@
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
+            padding-right: 0.5rem;
         }
 
         .chat-item {
-            padding: 0.875rem 1rem;
+            padding: 0.75rem 0.875rem;
             border-radius: 0.75rem;
             background: rgba(0, 0, 0, 0.2);
             border: 1px solid var(--border);
@@ -140,12 +150,15 @@
             display: flex;
             align-items: center;
             gap: 0.75rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .chat-item:hover {
             border-color: var(--gold);
             color: var(--text);
-            transform: translateX(4px);
+            transform: translateX(2px);
         }
 
         .chat-item.active {
@@ -158,10 +171,12 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
+            background: var(--bg-surface);
+            backdrop-filter: blur(20px);
         }
 
         .header {
-            padding: 1rem 1.5rem;
+            padding: 0.875rem 1.25rem;
             background: var(--bg-surface);
             border-bottom: 1px solid var(--border);
             display: flex;
@@ -171,7 +186,7 @@
         }
 
         .model-select {
-            padding: 0.625rem 1rem;
+            padding: 0.5rem 0.875rem;
             background: rgba(0, 0, 0, 0.2);
             border: 1px solid var(--border);
             border-radius: 0.75rem;
@@ -197,6 +212,7 @@
             line-height: 1.6;
             font-size: 0.9375rem;
             animation: slideIn 0.3s ease;
+            box-shadow: var(--shadow);
         }
 
         .message.user {
@@ -216,10 +232,11 @@
             border-radius: 0.75rem;
             padding: 1rem;
             margin: 0.5rem 0;
+            overflow-x: auto;
         }
 
         .input-area {
-            padding: 1rem 1.5rem;
+            padding: 1rem 1.25rem;
             background: var(--bg-surface);
             border-top: 1px solid var(--border);
             backdrop-filter: blur(20px);
@@ -265,7 +282,7 @@
         }
 
         .action-btn:hover {
-            color: var(--gold);
+            color: var(--gold-bright);
             background: var(--gold-glow);
         }
 
@@ -283,6 +300,12 @@
             border-radius: 0.75rem;
             overflow: hidden;
             border: 1px solid var(--border);
+            transition: all 0.2s ease;
+        }
+
+        .preview-item:hover {
+            border-color: var(--gold);
+            transform: scale(1.02);
         }
 
         .preview-item img {
@@ -312,6 +335,12 @@
             cursor: pointer;
             font-size: 0.75rem;
             backdrop-filter: blur(4px);
+            transition: all 0.2s ease;
+        }
+
+        .remove-file:hover {
+            background: rgba(255, 0, 0, 0.3);
+            border-color: rgba(255, 0, 0, 0.5);
         }
 
         @keyframes slideIn {
@@ -335,6 +364,35 @@
         ::-webkit-scrollbar-thumb:hover {
             background: var(--gold);
         }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            gap: 1rem;
+            color: var(--text-dim);
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .empty-state svg {
+            width: 48px;
+            height: 48px;
+            stroke: var(--gold);
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            font-weight: 500;
+            color: var(--text);
+        }
+
+        .empty-state p {
+            font-size: 0.875rem;
+            max-width: 400px;
+        }
     </style>
 </head>
 <body>
@@ -357,14 +415,12 @@
         <main class="main">
             <div class="header">
                 <select class="model-select" id="modelSelect">
-                    <option value="gpt4-vision">GPT-4 Vision</option>
                     <option value="claude-opus">Claude 3 Opus</option>
                     <option value="claude-sonnet">Claude 3 Sonnet</option>
                     <option value="claude-haiku">Claude 3 Haiku</option>
+                    <option value="gpt4-vision">GPT-4 Vision</option>
                 </select>
             </div>
-
-            <div class="messages" id="messages"></div>
 
             <div class="input-area">
                 <div class="input-wrap">
@@ -400,6 +456,7 @@
         let messageHistory = [];
         let uploadedFiles = [];
 
+        // Configure markdown and syntax highlighting
         marked.setOptions({
             highlight: (code, lang) => hljs.highlightAuto(code).value,
             breaks: true
@@ -423,10 +480,21 @@
                     localStorage.setItem('token', token);
                     document.getElementById('loginScreen').style.display = 'none';
                     document.getElementById('app').style.display = 'grid';
-                    initializeApp();
+                    await initializeApp();
+                } else {
+                    alert('Login failed. Please check your credentials.');
                 }
             } catch (error) {
-                console.error('Initialization failed:', error);
+                console.error('Login failed:', error);
+                alert('Login failed. Please try again.');
+            }
+        }
+
+        async function initializeApp() {
+            setupEventListeners();
+            await loadChats();
+            if (currentChatId) {
+                await loadChat(currentChatId);
             }
         }
 
@@ -442,6 +510,14 @@
             });
 
             fileInput.addEventListener('change', handleFileUpload);
+
+            // Add keydown event for login form
+            document.getElementById('password').addEventListener('keydown', e => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    login();
+                }
+            });
         }
 
         function autoResize(textarea) {
@@ -467,13 +543,13 @@
                         const item = document.createElement('div');
                         item.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
                         
-                        const title = chat.messages?.[0]?.content?.substring(0, 30) || 'New Chat';
+                        const title = chat.messages?.[0]?.content?.substring(0, 25) || 'New Chat';
                         
                         item.innerHTML = `
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                             </svg>
-                            <span>${title}${title.length > 30 ? '...' : ''}</span>
+                            <span>${title}${title.length > 25 ? '...' : ''}</span>
                         `;
                         
                         item.dataset.chatId = chat.id;
@@ -500,27 +576,31 @@
                 const chat = await response.json();
                 currentChatId = chat.id;
                 messageHistory = [];
-                document.getElementById('messages').innerHTML = '';
+                document.getElementById('messages').innerHTML = `
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <h3>Start a New Conversation</h3>
+                        <p>Type a message below to begin chatting</p>
+                    </div>
+                `;
                 await loadChats();
             } catch (error) {
                 console.error('Failed to start new chat:', error);
+                alert('Failed to create new chat. Please try again.');
             }
         }
 
         async function loadChat(chatId) {
             try {
-                // First, find the chat in the existing chats list
-                const response = await fetch('/api/chats', {
+                const response = await fetch(`/api/chats/${chatId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
-                if (!response.ok) throw new Error('Failed to load chats');
+                if (!response.ok) throw new Error('Failed to load chat');
                 
-                const chats = await response.json();
-                const chat = chats.find(c => c.id === chatId);
-                
-                if (!chat) throw new Error('Chat not found');
-                
+                const chat = await response.json();
                 currentChatId = chatId;
                 messageHistory = chat.messages || [];
                 
@@ -531,6 +611,16 @@
                     messageHistory.forEach(msg => {
                         appendMessage(msg.content, msg.role === 'user');
                     });
+                } else {
+                    messagesContainer.innerHTML = `
+                        <div class="empty-state">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            <h3>Start a New Conversation</h3>
+                            <p>Type a message below to begin chatting</p>
+                        </div>
+                    `;
                 }
                 
                 // Update chat list UI
@@ -542,20 +632,29 @@
                 });
             } catch (error) {
                 console.error('Failed to load chat:', error);
+                alert('Failed to load chat. Please try again.');
             }
         }
 
-        // Message & File Handling
+        // File Handling
         async function handleFileUpload(event) {
             const files = event.target.files;
             if (!files.length) return;
 
             const maxSize = 5 * 1024 * 1024; // 5MB limit
             const formData = new FormData();
+            let oversizedFiles = [];
 
             for (let file of files) {
-                if (file.size > maxSize) continue;
+                if (file.size > maxSize) {
+                    oversizedFiles.push(file.name);
+                    continue;
+                }
                 formData.append('files', file);
+            }
+
+            if (oversizedFiles.length) {
+                alert(`Some files exceed the 5MB limit: ${oversizedFiles.join(', ')}`);
             }
 
             try {
@@ -572,6 +671,7 @@
                 updateFilePreview();
             } catch (error) {
                 console.error('File upload failed:', error);
+                alert('Failed to upload files. Please try again.');
             }
 
             event.target.value = '';
@@ -582,15 +682,27 @@
             preview.innerHTML = '';
 
             uploadedFiles.forEach((file, index) => {
+                const item = document.createElement('div');
+                item.className = 'preview-item';
+                
                 if (file.type === 'image') {
-                    const item = document.createElement('div');
-                    item.className = 'preview-item';
                     item.innerHTML = `
                         <img src="${file.base64}" alt="Preview">
-                        <button class="remove-file" onclick="removeFile(${index})">×</button>
+                        <button class="remove-file" onclick="removeFile(${index})">&times;</button>
                     `;
-                    preview.appendChild(item);
+                } else {
+                    item.innerHTML = `
+                        <div style="padding: 1rem; text-align: center;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+                                <polyline points="13 2 13 9 20 9"/>
+                            </svg>
+                            <div style="font-size: 0.75rem; margin-top: 0.5rem;">${file.name}</div>
+                        </div>
+                        <button class="remove-file" onclick="removeFile(${index})">&times;</button>
+                    `;
                 }
+                preview.appendChild(item);
             });
         }
 
@@ -599,18 +711,15 @@
             updateFilePreview();
         }
 
+        // Message Handling
         async function sendMessage() {
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
             
             if (!message && !uploadedFiles.length) return;
-
-            const systemPrompt = `You are an AI assistant that can:
-- Write and format code with syntax highlighting
-- Create formatted documents using Markdown
-- Process and analyze files
-- Generate data visualizations
-Always format responses appropriately using markdown and code blocks.`;
+            if (!currentChatId) {
+                await startNewChat();
+            }
 
             try {
                 appendMessage(message, true);
@@ -628,7 +737,6 @@ Always format responses appropriately using markdown and code blocks.`;
                         message,
                         files: uploadedFiles,
                         model: document.getElementById('modelSelect').value,
-                        systemPrompt,
                         history: messageHistory
                     })
                 });
@@ -648,9 +756,13 @@ Always format responses appropriately using markdown and code blocks.`;
 
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
-                            const data = JSON.parse(line.slice(5));
-                            currentResponse += data.content;
-                            updateLastMessage(currentResponse);
+                            try {
+                                const data = JSON.parse(line.slice(5));
+                                currentResponse += data.content;
+                                updateLastMessage(currentResponse);
+                            } catch (e) {
+                                console.error('Error parsing stream:', e);
+                            }
                         }
                     }
                 }
@@ -660,15 +772,36 @@ Always format responses appropriately using markdown and code blocks.`;
                     { role: 'assistant', content: currentResponse }
                 );
 
+                // Update chat in the backend
+                await fetch(`/api/chats/${currentChatId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        messages: messageHistory
+                    })
+                });
+
                 uploadedFiles = [];
                 updateFilePreview();
+                await loadChats(); // Refresh chat list to update preview
             } catch (error) {
                 console.error('Failed to send message:', error);
+                alert('Failed to send message. Please try again.');
             }
         }
 
         function appendMessage(content, isUser) {
             const messages = document.getElementById('messages');
+            
+            // Remove empty state if present
+            const emptyState = messages.querySelector('.empty-state');
+            if (emptyState) {
+                messages.removeChild(emptyState);
+            }
+            
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isUser ? 'user' : 'ai'}`;
 
@@ -710,15 +843,47 @@ Always format responses appropriately using markdown and code blocks.`;
             }
         }
 
-        // Check for existing token
+        // Handle saved token and initialization
         window.onload = () => {
             const savedToken = localStorage.getItem('token');
             if (savedToken) {
                 token = savedToken;
-                document.getElementById('loginScreen').style.display = 'none';
-                document.getElementById('app').style.display = 'grid';
-                initializeApp();
+                
+                // Verify token before showing the app
+                fetch('/api/verify', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }).then(response => {
+                    if (response.ok) {
+                        document.getElementById('loginScreen').style.display = 'none';
+                        document.getElementById('app').style.display = 'grid';
+                        initializeApp();
+                    } else {
+                        // Token is invalid, remove it
+                        localStorage.removeItem('token');
+                    }
+                }).catch(error => {
+                    console.error('Token verification failed:', error);
+                    localStorage.removeItem('token');
+                });
             }
+
+            // Add logout functionality
+            window.addEventListener('keydown', e => {
+                if (e.key === 'l' && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    localStorage.removeItem('token');
+                    window.location.reload();
+                }
+            });
         };
     </script>
 </body>
+</html><div class="messages" id="messages">
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <h3>No messages yet</h3>
+                    <p>Start a new conversation or select an existing chat from the sidebar</p>
+                </div>
+            </div>
